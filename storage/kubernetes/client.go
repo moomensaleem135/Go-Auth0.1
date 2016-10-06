@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -166,26 +165,6 @@ func (c *client) delete(resource, name string) error {
 	return checkHTTPErr(resp, http.StatusOK)
 }
 
-func (c *client) deleteAll(resource string) error {
-	var list struct {
-		k8sapi.TypeMeta `json:",inline"`
-		k8sapi.ListMeta `json:"metadata,omitempty"`
-		Items           []struct {
-			k8sapi.TypeMeta   `json:",inline"`
-			k8sapi.ObjectMeta `json:"metadata,omitempty"`
-		} `json:"items"`
-	}
-	if err := c.list(resource, &list); err != nil {
-		return err
-	}
-	for _, item := range list.Items {
-		if err := c.delete(resource, item.Name); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (c *client) put(resource, name string, v interface{}) error {
 	body, err := json.Marshal(v)
 	if err != nil {
@@ -211,9 +190,9 @@ func (c *client) put(resource, name string, v interface{}) error {
 
 func newClient(cluster k8sapi.Cluster, user k8sapi.AuthInfo, namespace string) (*client, error) {
 	tlsConfig := cryptopasta.DefaultTLSConfig()
-	data := func(b string, file string) ([]byte, error) {
-		if b != "" {
-			return base64.StdEncoding.DecodeString(b)
+	data := func(b []byte, file string) ([]byte, error) {
+		if b != nil {
+			return b, nil
 		}
 		if file == "" {
 			return nil, nil
