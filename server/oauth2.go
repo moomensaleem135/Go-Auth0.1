@@ -74,7 +74,7 @@ const (
 	scopeGroups            = "groups"
 	scopeEmail             = "email"
 	scopeProfile           = "profile"
-	scopeCrossClientPrefix = "audience:server:client_id:"
+	scopeCrossClientPrefix = "oauth2:server:client_id:"
 )
 
 const (
@@ -98,7 +98,7 @@ func (a audience) MarshalJSON() ([]byte, error) {
 	if len(a) == 1 {
 		return json.Marshal(a[0])
 	}
-	return json.Marshal([]string(a))
+	return json.Marshal(a)
 }
 
 type idTokenClaims struct {
