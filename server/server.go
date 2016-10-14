@@ -273,7 +273,7 @@ func startGarbageCollection(ctx context.Context, s storage.Storage, frequency ti
 			case <-time.After(frequency):
 				if r, err := s.GarbageCollect(now()); err != nil {
 					log.Printf("garbage collection failed: %v", err)
-				} else if r.AuthRequests > 0 || r.AuthCodes > 0 {
+				} else {
 					log.Printf("garbage collection run, delete auth requests=%d, auth codes=%d", r.AuthRequests, r.AuthCodes)
 				}
 			}
