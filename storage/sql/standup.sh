@@ -70,7 +70,7 @@ function wait_for_file {
 }
 
 function wait_for_container {
-  while [ -z "$( rkt list --full | grep $1 | grep running )" ]; do
+  while [ -z "$( rkt list --full | grep $1 )" ]; do
     sleep 1
   done
 }
