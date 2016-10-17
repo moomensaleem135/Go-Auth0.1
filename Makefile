@@ -31,6 +31,10 @@ bin/dex: FORCE generated
 bin/example-app: FORCE
 	@go install -v -ldflags $(LD_FLAGS) $(REPO_PATH)/cmd/example-app
 
+.PHONY: release-binary
+release-binary:
+	@go build -o _output/bin/dex -v -ldflags $(LD_FLAGS) $(REPO_PATH)/cmd/dex
+
 .PHONY: generated
 generated: server/templates_default.go
 
@@ -50,7 +54,7 @@ fmt:
 
 lint:
 	@for package in $(shell go list ./... | grep -v '/vendor/' | grep -v '/api'); do \
-      golint -set_exit_status $$package; \
+      golint -set_exit_status $$package $$i || exit 1; \
 	done
 
 server/templates_default.go: $(wildcard web/templates/**)
@@ -67,17 +71,16 @@ _output/images/library-alpine-3.4.aci:
 	@docker2aci docker://alpine:3.4
 	@mv library-alpine-3.4.aci _output/images/library-alpine-3.4.aci
 
-_output/images/dex.aci: _output/bin/dex _output/images/library-alpine-3.4.aci
+.PHONY: aci
+aci: clean-release _output/bin/dex _output/images/library-alpine-3.4.aci
 	# Using acbuild to build a application container image.
 	@sudo ./scripts/build-aci ./_output/images/library-alpine-3.4.aci
 	@sudo chown $(user):$(group) _output/images/dex.aci
-
-.PHONY: aci
-aci: _output/images/dex.aci
+	@mv _output/images/dex.aci _output/images/dex-$(VERSION)-linux-amd64.aci
 
 .PHONY: docker-image
-docker-image: _output/bin/dex
-	@docker build -t $(DOCKER_IMAGE) .
+docker-image: clean-release _output/bin/dex
+	@sudo docker build -t $(DOCKER_IMAGE) .
 
 .PHONY: grpc
 grpc: api/api.pb.go
@@ -91,8 +94,11 @@ bin/protoc: scripts/get-protoc
 bin/protoc-gen-go:
 	@go install -v $(REPO_PATH)/vendor/github.com/golang/protobuf/protoc-gen-go
 
-clean:
+clean: clean-release
 	@rm -rf bin/
+
+.PHONY: clean-release
+clean-release:
 	@rm -rf _output/
 
 testall: testrace vet fmt lint

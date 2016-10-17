@@ -52,6 +52,7 @@ func tokenErr(w http.ResponseWriter, typ, description string, statusCode int) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	w.WriteHeader(statusCode)
 	w.Write(body)
 }
 
@@ -212,7 +213,7 @@ func parseAuthorizationRequest(s storage.Storage, supportedResponseTypes map[str
 		return &authErr{state, redirectURI, typ, fmt.Sprintf(format, a...)}
 	}
 
-	scopes := strings.Split(r.Form.Get("scope"), " ")
+	scopes := strings.Fields(r.Form.Get("scope"))
 
 	var (
 		unrecognized  []string

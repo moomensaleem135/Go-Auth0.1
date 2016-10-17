@@ -3,6 +3,8 @@ package kubernetes
 import (
 	"errors"
 	"fmt"
+	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -45,15 +47,6 @@ func (c *Config) Open() (storage.Storage, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// start up garbage collection
-	gcFrequency := c.GCFrequency
-	if gcFrequency == 0 {
-		gcFrequency = 600
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cli.cancel = cancel
-	go cli.gc(ctx, time.Duration(gcFrequency)*time.Second)
 	return cli, nil
 }
 
@@ -89,7 +82,51 @@ func (c *Config) open() (*client, error) {
 		return nil, err
 	}
 
-	return newClient(cluster, user, namespace)
+	cli, err := newClient(cluster, user, namespace)
+	if err != nil {
+		return nil, fmt.Errorf("create client: %v", err)
+	}
+
+	// Don't try to synchronize this because creating third party resources is not
+	// a synchronous event. Even after the API server returns a 200, it can still
+	// take several seconds for them to actually appear.
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		for {
+			if err := cli.createThirdPartyResources(); err != nil {
+				log.Printf("failed creating third party resources: %v", err)
+			} else {
+				return
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(30 * time.Second):
+			}
+		}
+	}()
+
+	// If the client is closed, stop trying to create third party resources.
+	cli.cancel = cancel
+	return cli, nil
+}
+
+func (cli *client) createThirdPartyResources() error {
+	for _, r := range thirdPartyResources {
+		err := cli.postResource("extensions/v1beta1", "", "thirdpartyresources", r)
+		if err != nil {
+			if e, ok := err.(httpError); ok {
+				if e.StatusCode() == http.StatusConflict {
+					log.Printf("third party resource already created %q", r.ObjectMeta.Name)
+					continue
+				}
+			}
+			return err
+		}
+		log.Printf("create third party resource %q", r.ObjectMeta.Name)
+	}
+	return nil
 }
 
 func (cli *client) Close() error {
@@ -119,7 +156,7 @@ func (cli *client) CreateRefresh(r storage.RefreshToken) error {
 	refresh := RefreshToken{
 		TypeMeta: k8sapi.TypeMeta{
 			Kind:       kindRefreshToken,
-			APIVersion: cli.apiVersionForResource(resourceRefreshToken),
+			APIVersion: cli.apiVersion,
 		},
 		ObjectMeta: k8sapi.ObjectMeta{
 			Name:      r.RefreshToken,
@@ -290,4 +327,41 @@ func (cli *client) UpdateAuthRequest(id string, updater func(a storage.AuthReque
 	newReq := cli.fromStorageAuthRequest(updated)
 	newReq.ObjectMeta = req.ObjectMeta
 	return cli.put(resourceAuthRequest, id, newReq)
+}
+
+func (cli *client) GarbageCollect(now time.Time) (result storage.GCResult, err error) {
+	var authRequests AuthRequestList
+	if err := cli.list(resourceAuthRequest, &authRequests); err != nil {
+		return result, fmt.Errorf("failed to list auth requests: %v", err)
+	}
+
+	var delErr error
+	for _, authRequest := range authRequests.AuthRequests {
+		if now.After(authRequest.Expiry) {
+			if err := cli.delete(resourceAuthRequest, authRequest.ObjectMeta.Name); err != nil {
+				log.Printf("failed to delete auth request: %v", err)
+				delErr = fmt.Errorf("failed to delete auth request: %v", err)
+			}
+			result.AuthRequests++
+		}
+	}
+	if delErr != nil {
+		return result, delErr
+	}
+
+	var authCodes AuthCodeList
+	if err := cli.list(resourceAuthCode, &authCodes); err != nil {
+		return result, fmt.Errorf("failed to list auth codes: %v", err)
+	}
+
+	for _, authCode := range authCodes.AuthCodes {
+		if now.After(authCode.Expiry) {
+			if err := cli.delete(resourceAuthCode, authCode.ObjectMeta.Name); err != nil {
+				log.Printf("failed to delete auth code %v", err)
+				delErr = fmt.Errorf("failed to delete auth code: %v", err)
+			}
+			result.AuthCodes++
+		}
+	}
+	return result, delErr
 }

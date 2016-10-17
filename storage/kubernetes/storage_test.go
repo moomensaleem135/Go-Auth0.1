@@ -60,7 +60,7 @@ func TestURLFor(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		c := &client{baseURL: test.baseURL, prependResourceNameToAPIGroup: false}
+		c := &client{baseURL: test.baseURL}
 		got := c.urlFor(test.apiVersion, test.namespace, test.resource, test.name)
 		if got != test.want {
 			t.Errorf("(&client{baseURL:%q}).urlFor(%q, %q, %q, %q): expected %q got %q",
@@ -74,7 +74,7 @@ func TestURLFor(t *testing.T) {
 
 func TestStorage(t *testing.T) {
 	client := loadClient(t)
-	conformance.RunTestSuite(t, func() storage.Storage {
+	conformance.RunTests(t, func() storage.Storage {
 		for _, resource := range []string{
 			resourceAuthCode,
 			resourceAuthRequest,

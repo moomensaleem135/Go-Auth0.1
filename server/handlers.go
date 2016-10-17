@@ -143,6 +143,7 @@ func (s *Server) handleAuthorization(w http.ResponseWriter, r *http.Request) {
 		s.renderError(w, http.StatusInternalServerError, err.Type, err.Description)
 		return
 	}
+	authReq.Expiry = s.now().Add(time.Minute * 30)
 	if err := s.storage.CreateAuthRequest(authReq); err != nil {
 		log.Printf("Failed to create authorization request: %v", err)
 		s.renderError(w, http.StatusInternalServerError, errServerError, "")
@@ -342,7 +343,7 @@ func (s *Server) handleApproval(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) sendCodeResponse(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) {
-	if authReq.Expiry.After(s.now()) {
+	if s.now().After(authReq.Expiry) {
 		s.renderError(w, http.StatusBadRequest, errInvalidRequest, "Authorization request period has expired.")
 		return
 	}
@@ -373,7 +374,7 @@ func (s *Server) sendCodeResponse(w http.ResponseWriter, r *http.Request, authRe
 				Nonce:       authReq.Nonce,
 				Scopes:      authReq.Scopes,
 				Claims:      authReq.Claims,
-				Expiry:      s.now().Add(time.Minute * 5),
+				Expiry:      s.now().Add(time.Minute * 30),
 				RedirectURI: authReq.RedirectURI,
 			}
 			if err := s.storage.CreateAuthCode(code); err != nil {
@@ -537,21 +538,26 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request, clie
 
 	scopes := refresh.Scopes
 	if scope != "" {
-		requestedScopes := strings.Split(scope, " ")
-		contains := func() bool {
-		Loop:
-			for _, s := range requestedScopes {
+		requestedScopes := strings.Fields(scope)
+		var unauthorizedScopes []string
+
+		for _, s := range requestedScopes {
+			contains := func() bool {
 				for _, scope := range refresh.Scopes {
 					if s == scope {
-						continue Loop
+						return true
 					}
 				}
 				return false
+			}()
+			if !contains {
+				unauthorizedScopes = append(unauthorizedScopes, s)
 			}
-			return true
-		}()
-		if !contains {
-			tokenErr(w, errInvalidRequest, "Requested scopes did not contain authorized scopes.", http.StatusBadRequest)
+		}
+
+		if len(unauthorizedScopes) > 0 {
+			msg := fmt.Sprintf("Requested scopes contain unauthorized scope(s): %q.", unauthorizedScopes)
+			tokenErr(w, errInvalidRequest, msg, http.StatusBadRequest)
 			return
 		}
 		scopes = requestedScopes

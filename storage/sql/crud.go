@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/coreos/dex/storage"
 )
@@ -81,6 +82,25 @@ type querier interface {
 // Abstract row vs rows.
 type scanner interface {
 	Scan(dest ...interface{}) error
+}
+
+func (c *conn) GarbageCollect(now time.Time) (result storage.GCResult, err error) {
+	r, err := c.Exec(`delete from auth_request where expiry < $1`, now)
+	if err != nil {
+		return result, fmt.Errorf("gc auth_request: %v", err)
+	}
+	if n, err := r.RowsAffected(); err == nil {
+		result.AuthRequests = n
+	}
+
+	r, err = c.Exec(`delete from auth_code where expiry < $1`, now)
+	if err != nil {
+		return result, fmt.Errorf("gc auth_code: %v", err)
+	}
+	if n, err := r.RowsAffected(); err == nil {
+		result.AuthCodes = n
+	}
+	return
 }
 
 func (c *conn) CreateAuthRequest(a storage.AuthRequest) error {
@@ -330,7 +350,7 @@ func (c *conn) UpdateKeys(updater func(old storage.Keys) (storage.Keys, error)) 
 				set 
 				    verification_keys = $1,
 					signing_key = $2,
-					singing_key_pub = $3,
+					signing_key_pub = $3,
 					next_rotation = $4
 				where id = $5;
 			`,
@@ -354,7 +374,7 @@ func getKeys(q querier) (keys storage.Keys, err error) {
 		select
 			verification_keys, signing_key, signing_key_pub, next_rotation
 		from keys
-		where id=$q
+		where id=$1
 	`, keysRowID).Scan(
 		decoder(&keys.VerificationKeys), decoder(&keys.SigningKey),
 		decoder(&keys.SigningKeyPub), &keys.NextRotation,
