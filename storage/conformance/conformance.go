@@ -8,8 +8,6 @@ import (
 	"testing"
 	"time"
 
-	jose "gopkg.in/square/go-jose.v2"
-
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/coreos/dex/storage"
@@ -20,10 +18,12 @@ import (
 // ensure that values being tested on never expire.
 var neverExpire = time.Now().UTC().Add(time.Hour * 24 * 365 * 100)
 
-// RunTests runs a set of conformance tests against a storage. newStorage should
-// return an initialized but empty storage. The storage will be closed at the
-// end of each test run.
-func RunTests(t *testing.T, newStorage func() storage.Storage) {
+// StorageFactory is a method for creating a new storage. The returned storage sould be initialized
+// but shouldn't have any existing data in it.
+type StorageFactory func() storage.Storage
+
+// RunTestSuite runs a set of conformance tests against a storage.
+func RunTestSuite(t *testing.T, sf StorageFactory) {
 	tests := []struct {
 		name string
 		run  func(t *testing.T, s storage.Storage)
@@ -33,24 +33,12 @@ func RunTests(t *testing.T, newStorage func() storage.Storage) {
 		{"ClientCRUD", testClientCRUD},
 		{"RefreshTokenCRUD", testRefreshTokenCRUD},
 		{"PasswordCRUD", testPasswordCRUD},
-		{"KeysCRUD", testKeysCRUD},
-		{"GarbageCollection", testGC},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			s := newStorage()
-			test.run(t, s)
-			s.Close()
+			test.run(t, sf())
 		})
 	}
-}
-
-func mustLoadJWK(b string) *jose.JSONWebKey {
-	var jwt jose.JSONWebKey
-	if err := jwt.UnmarshalJSON([]byte(b)); err != nil {
-		panic(err)
-	}
-	return &jwt
 }
 
 func mustBeErrNotFound(t *testing.T, kind string, err error) {
@@ -286,143 +274,5 @@ func testPasswordCRUD(t *testing.T, s storage.Storage) {
 
 	if _, err := s.GetPassword(password.Email); err != storage.ErrNotFound {
 		t.Errorf("after deleting password expected storage.ErrNotFound, got %v", err)
-	}
-}
-
-func testKeysCRUD(t *testing.T, s storage.Storage) {
-	updateAndCompare := func(k storage.Keys) {
-		err := s.UpdateKeys(func(oldKeys storage.Keys) (storage.Keys, error) {
-			return k, nil
-		})
-		if err != nil {
-			t.Errorf("failed to update keys: %v", err)
-			return
-		}
-
-		if got, err := s.GetKeys(); err != nil {
-			t.Errorf("failed to get keys: %v", err)
-		} else {
-			got.NextRotation = got.NextRotation.UTC()
-			if diff := pretty.Compare(k, got); diff != "" {
-				t.Errorf("got keys did not equal expected: %s", diff)
-			}
-		}
-	}
-
-	// Postgres isn't as accurate with nano seconds as we'd like
-	n := time.Now().UTC().Round(time.Second)
-
-	keys1 := storage.Keys{
-		SigningKey:    jsonWebKeys[0].Private,
-		SigningKeyPub: jsonWebKeys[0].Public,
-		NextRotation:  n,
-	}
-
-	keys2 := storage.Keys{
-		SigningKey:    jsonWebKeys[2].Private,
-		SigningKeyPub: jsonWebKeys[2].Public,
-		NextRotation:  n.Add(time.Hour),
-		VerificationKeys: []storage.VerificationKey{
-			{
-				PublicKey: jsonWebKeys[0].Public,
-				Expiry:    n.Add(time.Hour),
-			},
-			{
-				PublicKey: jsonWebKeys[1].Public,
-				Expiry:    n.Add(time.Hour * 2),
-			},
-		},
-	}
-
-	updateAndCompare(keys1)
-	updateAndCompare(keys2)
-}
-
-func testGC(t *testing.T, s storage.Storage) {
-	n := time.Now().UTC()
-	c := storage.AuthCode{
-		ID:            storage.NewID(),
-		ClientID:      "foobar",
-		RedirectURI:   "https://localhost:80/callback",
-		Nonce:         "foobar",
-		Scopes:        []string{"openid", "email"},
-		Expiry:        n.Add(time.Second),
-		ConnectorID:   "ldap",
-		ConnectorData: []byte(`{"some":"data"}`),
-		Claims: storage.Claims{
-			UserID:        "1",
-			Username:      "jane",
-			Email:         "jane.doe@example.com",
-			EmailVerified: true,
-			Groups:        []string{"a", "b"},
-		},
-	}
-
-	if err := s.CreateAuthCode(c); err != nil {
-		t.Fatalf("failed creating auth code: %v", err)
-	}
-
-	if _, err := s.GarbageCollect(n); err != nil {
-		t.Errorf("garbage collection failed: %v", err)
-	}
-	if _, err := s.GetAuthCode(c.ID); err != nil {
-		t.Errorf("expected to be able to get auth code after GC: %v", err)
-	}
-
-	if r, err := s.GarbageCollect(n.Add(time.Minute)); err != nil {
-		t.Errorf("garbage collection failed: %v", err)
-	} else if r.AuthCodes != 1 {
-		t.Errorf("expected to garbage collect 1 objects, got %d", r.AuthCodes)
-	}
-
-	if _, err := s.GetAuthCode(c.ID); err == nil {
-		t.Errorf("expected auth code to be GC'd")
-	} else if err != storage.ErrNotFound {
-		t.Errorf("expected storage.ErrNotFound, got %v", err)
-	}
-
-	a := storage.AuthRequest{
-		ID:                  storage.NewID(),
-		ClientID:            "foobar",
-		ResponseTypes:       []string{"code"},
-		Scopes:              []string{"openid", "email"},
-		RedirectURI:         "https://localhost:80/callback",
-		Nonce:               "foo",
-		State:               "bar",
-		ForceApprovalPrompt: true,
-		LoggedIn:            true,
-		Expiry:              n,
-		ConnectorID:         "ldap",
-		ConnectorData:       []byte(`{"some":"data"}`),
-		Claims: storage.Claims{
-			UserID:        "1",
-			Username:      "jane",
-			Email:         "jane.doe@example.com",
-			EmailVerified: true,
-			Groups:        []string{"a", "b"},
-		},
-	}
-
-	if err := s.CreateAuthRequest(a); err != nil {
-		t.Fatalf("failed creating auth request: %v", err)
-	}
-
-	if _, err := s.GarbageCollect(n); err != nil {
-		t.Errorf("garbage collection failed: %v", err)
-	}
-	if _, err := s.GetAuthRequest(a.ID); err != nil {
-		t.Errorf("expected to be able to get auth code after GC: %v", err)
-	}
-
-	if r, err := s.GarbageCollect(n.Add(time.Minute)); err != nil {
-		t.Errorf("garbage collection failed: %v", err)
-	} else if r.AuthRequests != 1 {
-		t.Errorf("expected to garbage collect 1 objects, got %d", r.AuthRequests)
-	}
-
-	if _, err := s.GetAuthRequest(a.ID); err == nil {
-		t.Errorf("expected auth code to be GC'd")
-	} else if err != storage.ErrNotFound {
-		t.Errorf("expected storage.ErrNotFound, got %v", err)
 	}
 }

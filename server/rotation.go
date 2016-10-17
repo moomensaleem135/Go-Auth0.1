@@ -20,7 +20,7 @@ import (
 // often to rotate them, and how long they can validate signatures after rotation.
 type rotationStrategy struct {
 	// Time between rotations.
-	rotationFrequency time.Duration
+	period time.Duration
 
 	// After being rotated how long can a key validate signatues?
 	verifyFor time.Duration
@@ -34,18 +34,18 @@ type rotationStrategy struct {
 func staticRotationStrategy(key *rsa.PrivateKey) rotationStrategy {
 	return rotationStrategy{
 		// Setting these values to 100 years is easier than having a flag indicating no rotation.
-		rotationFrequency: time.Hour * 8760 * 100,
-		verifyFor:         time.Hour * 8760 * 100,
-		key:               func() (*rsa.PrivateKey, error) { return key, nil },
+		period:    time.Hour * 8760 * 100,
+		verifyFor: time.Hour * 8760 * 100,
+		key:       func() (*rsa.PrivateKey, error) { return key, nil },
 	}
 }
 
 // defaultRotationStrategy returns a strategy which rotates keys every provided period,
 // holding onto the public parts for some specified amount of time.
-func defaultRotationStrategy(rotationFrequency, verifyFor time.Duration) rotationStrategy {
+func defaultRotationStrategy(rotationPeriod, verifyFor time.Duration) rotationStrategy {
 	return rotationStrategy{
-		rotationFrequency: rotationFrequency,
-		verifyFor:         verifyFor,
+		period:    rotationPeriod,
+		verifyFor: verifyFor,
 		key: func() (*rsa.PrivateKey, error) {
 			return rsa.GenerateKey(rand.Reader, 2048)
 		},
@@ -56,34 +56,40 @@ type keyRotater struct {
 	storage.Storage
 
 	strategy rotationStrategy
-	now      func() time.Time
+	cancel   context.CancelFunc
+
+	now func() time.Time
 }
 
-// startKeyRotation begins key rotation in a new goroutine, closing once the context is canceled.
-//
-// The method blocks until after the first attempt to rotate keys has completed. That way
-// healthy storages will return from this call with valid keys.
-func startKeyRotation(ctx context.Context, s storage.Storage, strategy rotationStrategy, now func() time.Time) {
-	rotater := keyRotater{s, strategy, now}
+func storageWithKeyRotation(s storage.Storage, strategy rotationStrategy, now func() time.Time) storage.Storage {
+	if now == nil {
+		now = time.Now
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	rotater := keyRotater{s, strategy, cancel, now}
 
-	// Try to rotate immediately so properly configured storages will have keys.
+	// Try to rotate immediately so properly configured storages will return a
+	// storage with keys.
 	if err := rotater.rotate(); err != nil {
 		log.Printf("failed to rotate keys: %v", err)
 	}
 
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(time.Second * 30):
-				if err := rotater.rotate(); err != nil {
-					log.Printf("failed to rotate keys: %v", err)
-				}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Second * 30):
+			if err := rotater.rotate(); err != nil {
+				log.Printf("failed to rotate keys: %v", err)
 			}
 		}
 	}()
-	return
+	return rotater
+}
+
+func (k keyRotater) Close() error {
+	k.cancel()
+	return k.Storage.Close()
 }
 
 func (k keyRotater) rotate() error {
@@ -145,7 +151,7 @@ func (k keyRotater) rotate() error {
 			keys.VerificationKeys = append(keys.VerificationKeys, verificationKey)
 		}
 
-		nextRotation = k.now().Add(k.strategy.rotationFrequency)
+		nextRotation = k.now().Add(k.strategy.period)
 		keys.SigningKey = priv
 		keys.SigningKeyPub = pub
 		keys.NextRotation = nextRotation

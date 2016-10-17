@@ -54,7 +54,7 @@ func TestSQLite3(t *testing.T) {
 	}
 
 	withTimeout(time.Second*10, func() {
-		conformance.RunTests(t, newStorage)
+		conformance.RunTestSuite(t, newStorage)
 	})
 }
 
@@ -72,24 +72,19 @@ func TestPostgres(t *testing.T) {
 		},
 		ConnectionTimeout: 5,
 	}
-
-	// t.Fatal has a bad habbit of not actually printing the error
-	fatal := func(i interface{}) {
-		fmt.Fprintln(os.Stdout, i)
-		t.Fatal(i)
+	conn, err := p.open()
+	if err != nil {
+		t.Fatal(err)
 	}
+	defer conn.Close()
 
 	newStorage := func() storage.Storage {
-		conn, err := p.open()
-		if err != nil {
-			fatal(err)
-		}
 		if err := cleanDB(conn); err != nil {
-			fatal(err)
+			t.Fatal(err)
 		}
 		return conn
 	}
 	withTimeout(time.Minute*1, func() {
-		conformance.RunTests(t, newStorage)
+		conformance.RunTestSuite(t, newStorage)
 	})
 }

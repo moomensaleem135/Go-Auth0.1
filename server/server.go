@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
-	"golang.org/x/net/context"
 
 	"github.com/gorilla/mux"
 
@@ -48,8 +47,6 @@ type Config struct {
 
 	RotateKeysAfter  time.Duration // Defaults to 6 hours.
 	IDTokensValidFor time.Duration // Defaults to 24 hours
-
-	GCFrequency time.Duration // Defaults to 5 minutes
 
 	// If specified, the server will use this function for determining time.
 	Now func() time.Time
@@ -90,14 +87,14 @@ type Server struct {
 }
 
 // NewServer constructs a server from the provided config.
-func NewServer(ctx context.Context, c Config) (*Server, error) {
-	return newServer(ctx, c, defaultRotationStrategy(
+func NewServer(c Config) (*Server, error) {
+	return newServer(c, defaultRotationStrategy(
 		value(c.RotateKeysAfter, 6*time.Hour),
 		value(c.IDTokensValidFor, 24*time.Hour),
 	))
 }
 
-func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy) (*Server, error) {
+func newServer(c Config, rotationStrategy rotationStrategy) (*Server, error) {
 	issuerURL, err := url.Parse(c.Issuer)
 	if err != nil {
 		return nil, fmt.Errorf("server: can't parse issuer URL")
@@ -141,9 +138,14 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 	}
 
 	s := &Server{
-		issuerURL:              *issuerURL,
-		connectors:             make(map[string]Connector),
-		storage:                newKeyCacher(c.Storage, now),
+		issuerURL:  *issuerURL,
+		connectors: make(map[string]Connector),
+		storage: newKeyCacher(
+			storageWithKeyRotation(
+				c.Storage, rotationStrategy, now,
+			),
+			now,
+		),
 		supportedResponseTypes: supported,
 		idTokensValidFor:       value(c.IDTokensValidFor, 24*time.Hour),
 		skipApproval:           c.SkipApprovalScreen,
@@ -176,9 +178,6 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 	handleFunc("/approval", s.handleApproval)
 	handleFunc("/healthz", s.handleHealth)
 	s.mux = r
-
-	startKeyRotation(ctx, c.Storage, rotationStrategy, now)
-	startGarbageCollection(ctx, c.Storage, value(c.GCFrequency, 5*time.Minute), now)
 
 	return s, nil
 }
@@ -262,22 +261,4 @@ func (k *keyCacher) GetKeys() (storage.Keys, error) {
 		k.keys.Store(&storageKeys)
 	}
 	return storageKeys, nil
-}
-
-func startGarbageCollection(ctx context.Context, s storage.Storage, frequency time.Duration, now func() time.Time) {
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(frequency):
-				if r, err := s.GarbageCollect(now()); err != nil {
-					log.Printf("garbage collection failed: %v", err)
-				} else if r.AuthRequests > 0 || r.AuthCodes > 0 {
-					log.Printf("garbage collection run, delete auth requests=%d, auth codes=%d", r.AuthRequests, r.AuthCodes)
-				}
-			}
-		}
-	}()
-	return
 }

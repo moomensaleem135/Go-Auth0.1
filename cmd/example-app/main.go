@@ -30,10 +30,6 @@ type app struct {
 	verifier *oidc.IDTokenVerifier
 	provider *oidc.Provider
 
-	// Does the provider use "offline_access" scope to request a refresh token
-	// or does it use "access_type=offline" (e.g. Google)?
-	offlineAsScope bool
-
 	ctx    context.Context
 	cancel context.CancelFunc
 }
@@ -106,34 +102,6 @@ func cmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("Failed to query provider %q: %v", issuerURL, err)
 			}
-
-			var s struct {
-				// What scopes does a provider support?
-				//
-				// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
-				ScopesSupported []string `json:"scopes_supported"`
-			}
-			if err := provider.Claims(&s); err != nil {
-				return fmt.Errorf("Failed to parse provider scopes_supported: %v", err)
-			}
-
-			if len(s.ScopesSupported) == 0 {
-				// scopes_supported is a "RECOMMENDED" discovery claim, not a required
-				// one. If missing, assume that the provider follows the spec and has
-				// an "offline_access" scope.
-				a.offlineAsScope = true
-			} else {
-				// See if scopes_supported has the "offline_access" scope.
-				a.offlineAsScope = func() bool {
-					for _, scope := range s.ScopesSupported {
-						if scope == oidc.ScopeOfflineAccess {
-							return true
-						}
-					}
-					return false
-				}()
-			}
-
 			a.provider = provider
 			a.verifier = provider.NewVerifier(a.ctx, oidc.VerifyAudience(a.clientID))
 
@@ -156,7 +124,7 @@ func cmd() *cobra.Command {
 	c.Flags().StringVar(&a.clientID, "client-id", "example-app", "OAuth2 client ID of this application.")
 	c.Flags().StringVar(&a.clientSecret, "client-secret", "ZXhhbXBsZS1hcHAtc2VjcmV0", "OAuth2 client secret of this application.")
 	c.Flags().StringVar(&a.redirectURI, "redirect-uri", "http://127.0.0.1:5555/callback", "Callback URL for OAuth2 responses.")
-	c.Flags().StringVar(&issuerURL, "issuer", "http://127.0.0.1:5556/dex", "URL of the OpenID Connect issuer.")
+	c.Flags().StringVar(&issuerURL, "issuer", "http://127.0.0.1:5556", "URL of the OpenID Connect issuer.")
 	c.Flags().StringVar(&listen, "listen", "http://127.0.0.1:5555", "HTTP(S) address to listen at.")
 	c.Flags().StringVar(&tlsCert, "tls-cert", "", "X509 cert file to present when serving HTTPS.")
 	c.Flags().StringVar(&tlsKey, "tls-key", "", "Private key for the HTTPS cert.")
@@ -198,15 +166,10 @@ func (a *app) handleLogin(w http.ResponseWriter, r *http.Request) {
 		scopes = append(scopes, "audience:server:client_id:"+client)
 	}
 
-	authCodeURL := ""
-	scopes = append(scopes, "openid", "profile", "email")
-	if a.offlineAsScope {
-		scopes = append(scopes, "offline_access")
-		authCodeURL = a.oauth2Config(scopes).AuthCodeURL("")
-	} else {
-		authCodeURL = a.oauth2Config(scopes).AuthCodeURL("", oauth2.AccessTypeOffline)
-	}
-	http.Redirect(w, r, authCodeURL, http.StatusSeeOther)
+	// TODO(ericchiang): Determine if provider does not support "offline_access" or has
+	// some other mechanism for requesting refresh tokens.
+	scopes = append(scopes, "openid", "profile", "email", "offline_access")
+	http.Redirect(w, r, a.oauth2Config(scopes).AuthCodeURL(""), http.StatusSeeOther)
 }
 
 func (a *app) handleCallback(w http.ResponseWriter, r *http.Request) {
@@ -232,7 +195,7 @@ func (a *app) handleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 		token, err = oauth2Config.TokenSource(a.ctx, t).Token()
 	default:
-		http.Error(w, fmt.Sprintf("no code in request: %q", r.Form), http.StatusBadRequest)
+		http.Error(w, "no code in request", http.StatusBadRequest)
 		return
 	}
 

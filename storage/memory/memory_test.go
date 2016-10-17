@@ -7,5 +7,5 @@ import (
 )
 
 func TestStorage(t *testing.T) {
-	conformance.RunTests(t, New)
+	conformance.RunTestSuite(t, New)
 }

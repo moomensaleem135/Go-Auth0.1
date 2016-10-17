@@ -9,7 +9,6 @@ import (
 	"net/http"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	yaml "gopkg.in/yaml.v2"
@@ -125,7 +124,7 @@ func serve(cmd *cobra.Command, args []string) error {
 		EnablePasswordDB:       c.EnablePasswordDB,
 	}
 
-	serv, err := server.NewServer(context.Background(), serverConfig)
+	serv, err := server.NewServer(serverConfig)
 	if err != nil {
 		return fmt.Errorf("initializing server: %v", err)
 	}

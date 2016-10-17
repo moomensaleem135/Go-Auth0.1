@@ -4,7 +4,6 @@ package memory
 import (
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/coreos/dex/storage"
 )
@@ -51,24 +50,6 @@ func (s *memStorage) tx(f func()) {
 }
 
 func (s *memStorage) Close() error { return nil }
-
-func (s *memStorage) GarbageCollect(now time.Time) (result storage.GCResult, err error) {
-	s.tx(func() {
-		for id, a := range s.authCodes {
-			if now.After(a.Expiry) {
-				delete(s.authCodes, id)
-				result.AuthCodes++
-			}
-		}
-		for id, a := range s.authReqs {
-			if now.After(a.Expiry) {
-				delete(s.authReqs, id)
-				result.AuthRequests++
-			}
-		}
-	})
-	return result, nil
-}
 
 func (s *memStorage) CreateClient(c storage.Client) (err error) {
 	s.tx(func() {
@@ -255,6 +236,29 @@ func (s *memStorage) GetAuthCode(id string) (c storage.AuthCode, err error) {
 			err = storage.ErrNotFound
 			return
 		}
+	})
+	return
+}
+
+func (s *memStorage) ClaimCode(id string) (err error) {
+	s.tx(func() {
+		if _, ok := s.authCodes[id]; !ok {
+			err = storage.ErrNotFound
+			return
+		}
+		delete(s.authCodes, id)
+	})
+	return
+}
+
+func (s *memStorage) ClaimRefresh(refreshToken string) (token storage.RefreshToken, err error) {
+	s.tx(func() {
+		var ok bool
+		if token, ok = s.refreshTokens[refreshToken]; !ok {
+			err = storage.ErrNotFound
+			return
+		}
+		delete(s.refreshTokens, refreshToken)
 	})
 	return
 }

@@ -4,15 +4,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"golang.org/x/net/context"
 )
 
 func TestHandleHealth(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	httpServer, server := newTestServer(ctx, t, nil)
+	httpServer, server := newTestServer(t, nil)
 	defer httpServer.Close()
 
 	rr := httptest.NewRecorder()
