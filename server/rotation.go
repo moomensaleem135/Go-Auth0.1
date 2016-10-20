@@ -20,7 +20,7 @@ import (
 // often to rotate them, and how long they can validate signatures after rotation.
 type rotationStrategy struct {
 	// Time between rotations.
-	rotationFrequency time.Duration
+	period time.Duration
 
 	// After being rotated how long can a key validate signatues?
 	verifyFor time.Duration
@@ -34,18 +34,18 @@ type rotationStrategy struct {
 func staticRotationStrategy(key *rsa.PrivateKey) rotationStrategy {
 	return rotationStrategy{
 		// Setting these values to 100 years is easier than having a flag indicating no rotation.
-		rotationFrequency: time.Hour * 8760 * 100,
-		verifyFor:         time.Hour * 8760 * 100,
-		key:               func() (*rsa.PrivateKey, error) { return key, nil },
+		period:    time.Hour * 8760 * 100,
+		verifyFor: time.Hour * 8760 * 100,
+		key:       func() (*rsa.PrivateKey, error) { return key, nil },
 	}
 }
 
 // defaultRotationStrategy returns a strategy which rotates keys every provided period,
 // holding onto the public parts for some specified amount of time.
-func defaultRotationStrategy(rotationFrequency, verifyFor time.Duration) rotationStrategy {
+func defaultRotationStrategy(rotationPeriod, verifyFor time.Duration) rotationStrategy {
 	return rotationStrategy{
-		rotationFrequency: rotationFrequency,
-		verifyFor:         verifyFor,
+		period:    rotationPeriod,
+		verifyFor: verifyFor,
 		key: func() (*rsa.PrivateKey, error) {
 			return rsa.GenerateKey(rand.Reader, 2048)
 		},
@@ -76,7 +76,7 @@ func startKeyRotation(ctx context.Context, s storage.Storage, strategy rotationS
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(time.Second * 30):
+			case <-time.After(strategy.period):
 				if err := rotater.rotate(); err != nil {
 					log.Printf("failed to rotate keys: %v", err)
 				}
@@ -145,7 +145,7 @@ func (k keyRotater) rotate() error {
 			keys.VerificationKeys = append(keys.VerificationKeys, verificationKey)
 		}
 
-		nextRotation = k.now().Add(k.strategy.rotationFrequency)
+		nextRotation = k.now().Add(k.strategy.period)
 		keys.SigningKey = priv
 		keys.SigningKeyPub = pub
 		keys.NextRotation = nextRotation

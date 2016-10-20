@@ -15,7 +15,6 @@ const (
 	tmplApproval = "approval.html"
 	tmplLogin    = "login.html"
 	tmplPassword = "password.html"
-	tmplOOB      = "oob.html"
 )
 
 const coreOSLogoURL = "https://coreos.com/assets/images/brand/coreos-wordmark-135x40px.png"
@@ -24,7 +23,6 @@ var requiredTmpls = []string{
 	tmplApproval,
 	tmplLogin,
 	tmplPassword,
-	tmplOOB,
 }
 
 // TemplateConfig describes.
@@ -108,7 +106,6 @@ func loadTemplates(config TemplateConfig) (*templates, error) {
 		loginTmpl:    tmpls.Lookup(tmplLogin),
 		approvalTmpl: tmpls.Lookup(tmplApproval),
 		passwordTmpl: tmpls.Lookup(tmplPassword),
-		oobTmpl:      tmpls.Lookup(tmplOOB),
 	}, nil
 }
 
@@ -123,7 +120,6 @@ type templates struct {
 	loginTmpl    *template.Template
 	approvalTmpl *template.Template
 	passwordTmpl *template.Template
-	oobTmpl      *template.Template
 }
 
 type connectorInfo struct {
@@ -177,14 +173,6 @@ func (t *templates) approval(w http.ResponseWriter, state, username, clientName 
 		Scopes []string
 	}{t.globalData, username, clientName, state, accesses}
 	renderTemplate(w, t.approvalTmpl, data)
-}
-
-func (t *templates) oob(w http.ResponseWriter, code string) {
-	data := struct {
-		TemplateConfig
-		Code string
-	}{t.globalData, code}
-	renderTemplate(w, t.oobTmpl, data)
 }
 
 // small io.Writer utilitiy to determine if executing the template wrote to the underlying response writer.
