@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -94,17 +95,18 @@ func checkHTTPErr(r *http.Response, validStatusCodes ...int) error {
 		return fmt.Errorf("read response body: %v", err)
 	}
 
-	// Check this case after we read the body so the connection can be reused.
-	if r.StatusCode == http.StatusNotFound {
-		return storage.ErrNotFound
-	}
-
 	var url, method string
 	if r.Request != nil {
 		method = r.Request.Method
 		url = r.Request.URL.String()
 	}
-	return &httpErr{method, url, r.StatusCode, body}
+	err = &httpErr{method, url, r.StatusCode, body}
+	log.Printf("%s", err)
+
+	if r.StatusCode == http.StatusNotFound {
+		return storage.ErrNotFound
+	}
+	return err
 }
 
 // Close the response body. The initial request is drained so the connection can
