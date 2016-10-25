@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -95,18 +94,17 @@ func checkHTTPErr(r *http.Response, validStatusCodes ...int) error {
 		return fmt.Errorf("read response body: %v", err)
 	}
 
+	// Check this case after we read the body so the connection can be reused.
+	if r.StatusCode == http.StatusNotFound {
+		return storage.ErrNotFound
+	}
+
 	var url, method string
 	if r.Request != nil {
 		method = r.Request.Method
 		url = r.Request.URL.String()
 	}
-	err = &httpErr{method, url, r.StatusCode, body}
-	log.Printf("%s", err)
-
-	if r.StatusCode == http.StatusNotFound {
-		return storage.ErrNotFound
-	}
-	return err
+	return &httpErr{method, url, r.StatusCode, body}
 }
 
 // Close the response body. The initial request is drained so the connection can
@@ -348,11 +346,7 @@ func inClusterConfig() (cluster k8sapi.Cluster, user k8sapi.AuthInfo, namespace 
 
 func currentContext(config *k8sapi.Config) (cluster k8sapi.Cluster, user k8sapi.AuthInfo, ns string, err error) {
 	if config.CurrentContext == "" {
-		if len(config.Contexts) == 1 {
-			config.CurrentContext = config.Contexts[0].Name
-		} else {
-			return cluster, user, "", errors.New("kubeconfig has no current context")
-		}
+		return cluster, user, "", errors.New("kubeconfig has no current context")
 	}
 	context, ok := func() (k8sapi.Context, bool) {
 		for _, namedContext := range config.Contexts {
