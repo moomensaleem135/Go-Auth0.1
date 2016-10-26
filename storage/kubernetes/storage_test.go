@@ -1,7 +1,6 @@
 package kubernetes
 
 import (
-	"fmt"
 	"os"
 	"testing"
 
@@ -79,7 +78,7 @@ func TestURLFor(t *testing.T) {
 
 func TestStorage(t *testing.T) {
 	client := loadClient(t)
-	newStorage := func() storage.Storage {
+	conformance.RunTests(t, func() storage.Storage {
 		for _, resource := range []string{
 			resourceAuthCode,
 			resourceAuthRequest,
@@ -89,14 +88,9 @@ func TestStorage(t *testing.T) {
 			resourcePassword,
 		} {
 			if err := client.deleteAll(resource); err != nil {
-				// Fatalf sometimes doesn't print the error message.
-				fmt.Fprintf(os.Stderr, "delete all %q failed: %v\n", resource, err)
 				t.Fatalf("delete all %q failed: %v", resource, err)
 			}
 		}
 		return client
-	}
-
-	conformance.RunTests(t, newStorage)
-	conformance.RunTransactionTests(t, newStorage)
+	})
 }
