@@ -7,7 +7,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/net/context"
@@ -45,7 +44,6 @@ func serve(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("read config file %s: %v", configFile, err)
 	}
-	configData = []byte(os.ExpandEnv(string(configData)))
 
 	var c Config
 	if err := yaml.Unmarshal(configData, &c); err != nil {
