@@ -78,20 +78,9 @@ type Storage interface {
 	DeleteRefresh(id string) error
 	DeletePassword(email string) error
 
-	// Update methods take a function for updating an object then performs that update within
-	// a transaction. "updater" functions may be called multiple times by a single update call.
+	// Update functions are assumed to be a performed within a single object transaction.
 	//
-	// Because new fields may be added to resources, updaters should only modify existing
-	// fields on the old object rather then creating new structs. For example:
-	//
-	//		updater := func(old storage.Client) (storage.Client, error) {
-	//			old.Secret = newSecret
-	//			return old, nil
-	//		}
-	//		if err := s.UpdateClient(clientID, updater); err != nil {
-	//			// update failed, handle error
-	//		}
-	//
+	// updaters may be called multiple times.
 	UpdateClient(id string, updater func(old Client) (Client, error)) error
 	UpdateKeys(updater func(old Keys) (Keys, error)) error
 	UpdateAuthRequest(id string, updater func(a AuthRequest) (AuthRequest, error)) error
@@ -249,8 +238,7 @@ type Password struct {
 	// (cough cough, kubernetes), must map this value appropriately.
 	Email string `yaml:"email"`
 
-	// Bcrypt encoded hash of the password. This package recommends a cost value of at
-	// least 14.
+	// Bcrypt encoded hash of the password. This package enforces a min cost value of 10
 	Hash []byte `yaml:"hash"`
 
 	// Optional username to display. NOT used during login.

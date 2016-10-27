@@ -1,33 +1,6 @@
 package kubernetes
 
-import (
-	"hash"
-	"hash/fnv"
-	"sync"
-	"testing"
-)
-
-// This test does not have an explicit error condition but is used
-// with the race detector to detect the safety of idToName.
-func TestIDToName(t *testing.T) {
-	n := 100
-	var wg sync.WaitGroup
-	wg.Add(n)
-	c := make(chan struct{})
-
-	h := func() hash.Hash { return fnv.New64() }
-
-	for i := 0; i < n; i++ {
-		go func() {
-			<-c
-			name := idToName("foo", h)
-			_ = name
-			wg.Done()
-		}()
-	}
-	close(c)
-	wg.Wait()
-}
+import "testing"
 
 func TestNamespaceFromServiceAccountJWT(t *testing.T) {
 	namespace, err := namespaceFromServiceAccountJWT(serviceAccountToken)

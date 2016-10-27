@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"golang.org/x/net/context"
@@ -76,42 +75,31 @@ func (c *Config) open() (*client, error) {
 		return nil, fmt.Errorf("create client: %v", err)
 	}
 
+	// Don't try to synchronize this because creating third party resources is not
+	// a synchronous event. Even after the API server returns a 200, it can still
+	// take several seconds for them to actually appear.
 	ctx, cancel := context.WithCancel(context.Background())
-
-	// Try to synchronously create the third party resources once. This doesn't mean
-	// they'll immediately be available, but ensures that the client will actually try
-	// once.
-	if err := cli.createThirdPartyResources(); err != nil {
-		log.Printf("failed creating third party resources: %v", err)
-		go func() {
-			for {
-				if err := cli.createThirdPartyResources(); err != nil {
-					log.Printf("failed creating third party resources: %v", err)
-				} else {
-					return
-				}
-
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(30 * time.Second):
-				}
+	go func() {
+		for {
+			if err := cli.createThirdPartyResources(); err != nil {
+				log.Printf("failed creating third party resources: %v", err)
+			} else {
+				return
 			}
-		}()
-	}
+
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(30 * time.Second):
+			}
+		}
+	}()
 
 	// If the client is closed, stop trying to create third party resources.
 	cli.cancel = cancel
 	return cli, nil
 }
 
-// createThirdPartyResources attempts to create the third party resources dex
-// requires or identifies that they're already enabled.
-//
-// Creating a third party resource does not mean that they'll be immediately available.
-//
-// TODO(ericchiang): Provide an option to wait for the third party resources
-// to actually be available.
 func (cli *client) createThirdPartyResources() error {
 	for _, r := range thirdPartyResources {
 		err := cli.postResource("extensions/v1beta1", "", "thirdpartyresources", r)
@@ -188,45 +176,19 @@ func (cli *client) GetAuthCode(id string) (storage.AuthCode, error) {
 }
 
 func (cli *client) GetClient(id string) (storage.Client, error) {
-	c, err := cli.getClient(id)
-	if err != nil {
+	var c Client
+	if err := cli.get(resourceClient, id, &c); err != nil {
 		return storage.Client{}, err
 	}
 	return toStorageClient(c), nil
 }
 
-func (cli *client) getClient(id string) (Client, error) {
-	var c Client
-	name := cli.idToName(id)
-	if err := cli.get(resourceClient, name, &c); err != nil {
-		return Client{}, err
-	}
-	if c.ID != id {
-		return Client{}, fmt.Errorf("get client: ID %q mapped to client with ID %q", id, c.ID)
-	}
-	return c, nil
-}
-
 func (cli *client) GetPassword(email string) (storage.Password, error) {
-	p, err := cli.getPassword(email)
-	if err != nil {
+	var p Password
+	if err := cli.get(resourcePassword, emailToID(email), &p); err != nil {
 		return storage.Password{}, err
 	}
 	return toStoragePassword(p), nil
-}
-
-func (cli *client) getPassword(email string) (Password, error) {
-	// TODO(ericchiang): Figure out whose job it is to lowercase emails.
-	email = strings.ToLower(email)
-	var p Password
-	name := cli.idToName(email)
-	if err := cli.get(resourcePassword, name, &p); err != nil {
-		return Password{}, err
-	}
-	if email != p.Email {
-		return Password{}, fmt.Errorf("get email: email %q mapped to password with email %q", email, p.Email)
-	}
-	return p, nil
 }
 
 func (cli *client) GetKeys() (storage.Keys, error) {
@@ -269,12 +231,7 @@ func (cli *client) DeleteAuthCode(code string) error {
 }
 
 func (cli *client) DeleteClient(id string) error {
-	// Check for hash collition.
-	c, err := cli.getClient(id)
-	if err != nil {
-		return err
-	}
-	return cli.delete(resourceClient, c.ObjectMeta.Name)
+	return cli.delete(resourceClient, id)
 }
 
 func (cli *client) DeleteRefresh(id string) error {
@@ -282,34 +239,28 @@ func (cli *client) DeleteRefresh(id string) error {
 }
 
 func (cli *client) DeletePassword(email string) error {
-	// Check for hash collition.
-	p, err := cli.getPassword(email)
-	if err != nil {
-		return err
-	}
-	return cli.delete(resourcePassword, p.ObjectMeta.Name)
+	return cli.delete(resourcePassword, emailToID(email))
 }
 
 func (cli *client) UpdateClient(id string, updater func(old storage.Client) (storage.Client, error)) error {
-	c, err := cli.getClient(id)
-	if err != nil {
+	var c Client
+	if err := cli.get(resourceClient, id, &c); err != nil {
 		return err
 	}
-
 	updated, err := updater(toStorageClient(c))
 	if err != nil {
 		return err
 	}
-	updated.ID = c.ID
 
 	newClient := cli.fromStorageClient(updated)
 	newClient.ObjectMeta = c.ObjectMeta
-	return cli.put(resourceClient, c.ObjectMeta.Name, newClient)
+	return cli.put(resourceClient, id, newClient)
 }
 
 func (cli *client) UpdatePassword(email string, updater func(old storage.Password) (storage.Password, error)) error {
-	p, err := cli.getPassword(email)
-	if err != nil {
+	id := emailToID(email)
+	var p Password
+	if err := cli.get(resourcePassword, id, &p); err != nil {
 		return err
 	}
 
@@ -317,11 +268,10 @@ func (cli *client) UpdatePassword(email string, updater func(old storage.Passwor
 	if err != nil {
 		return err
 	}
-	updated.Email = p.Email
 
 	newPassword := cli.fromStoragePassword(updated)
 	newPassword.ObjectMeta = p.ObjectMeta
-	return cli.put(resourcePassword, p.ObjectMeta.Name, newPassword)
+	return cli.put(resourcePassword, id, newPassword)
 }
 
 func (cli *client) UpdateKeys(updater func(old storage.Keys) (storage.Keys, error)) error {
