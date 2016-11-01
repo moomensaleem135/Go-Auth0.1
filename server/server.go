@@ -172,7 +172,7 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 	handleFunc("/keys", s.handlePublicKeys)
 	handleFunc("/auth", s.handleAuthorization)
 	handleFunc("/auth/{connector}", s.handleConnectorLogin)
-	handleFunc("/callback/{connector}", s.handleConnectorCallback)
+	handleFunc("/callback", s.handleConnectorCallback)
 	handleFunc("/approval", s.handleApproval)
 	handleFunc("/healthz", s.handleHealth)
 	s.mux = r
@@ -218,8 +218,9 @@ func (db passwordDB) Login(email, password string) (connector.Identity, bool, er
 	if err != nil {
 		if err != storage.ErrNotFound {
 			log.Printf("get password: %v", err)
+			return connector.Identity{}, false, err
 		}
-		return connector.Identity{}, false, err
+		return connector.Identity{}, false, nil
 	}
 	if err := bcrypt.CompareHashAndPassword(p.Hash, []byte(password)); err != nil {
 		return connector.Identity{}, false, nil
