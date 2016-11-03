@@ -53,55 +53,52 @@ import (
 type Config struct {
 	// The host and optional port of the LDAP server. If port isn't supplied, it will be
 	// guessed based on the TLS configuration. 389 or 636.
-	Host string `json:"host"`
+	Host string `yaml:"host"`
 
 	// Required if LDAP host does not use TLS.
-	InsecureNoSSL bool `json:"insecureNoSSL"`
+	InsecureNoSSL bool `yaml:"insecureNoSSL"`
 
 	// Path to a trusted root certificate file.
-	RootCA string `json:"rootCA"`
-
-	// Base64 encoded PEM data containing root CAs.
-	RootCAData []byte `json:"rootCAData"`
+	RootCA string `yaml:"rootCA"`
 
 	// BindDN and BindPW for an application service account. The connector uses these
 	// credentials to search for users and groups.
-	BindDN string `json:"bindDN"`
-	BindPW string `json:"bindPW"`
+	BindDN string `yaml:"bindDN"`
+	BindPW string `yaml:"bindPW"`
 
 	// User entry search configuration.
 	UserSearch struct {
 		// BsaeDN to start the search from. For example "cn=users,dc=example,dc=com"
-		BaseDN string `json:"baseDN"`
+		BaseDN string `yaml:"baseDN"`
 
 		// Optional filter to apply when searching the directory. For example "(objectClass=person)"
-		Filter string `json:"filter"`
+		Filter string `yaml:"filter"`
 
 		// Attribute to match against the inputted username. This will be translated and combined
 		// with the other filter as "(<attr>=<username>)".
-		Username string `json:"username"`
+		Username string `yaml:"username"`
 
 		// Can either be:
 		// * "sub" - search the whole sub tree
 		// * "one" - only search one level
-		Scope string `json:"scope"`
+		Scope string `yaml:"scope"`
 
 		// A mapping of attributes on the user entry to claims.
-		IDAttr    string `json:"idAttr"`    // Defaults to "uid"
-		EmailAttr string `json:"emailAttr"` // Defaults to "mail"
-		NameAttr  string `json:"nameAttr"`  // No default.
+		IDAttr    string `yaml:"idAttr"`    // Defaults to "uid"
+		EmailAttr string `yaml:"emailAttr"` // Defaults to "mail"
+		NameAttr  string `yaml:"nameAttr"`  // No default.
 
-	} `json:"userSearch"`
+	} `yaml:"userSearch"`
 
 	// Group search configuration.
 	GroupSearch struct {
 		// BsaeDN to start the search from. For example "cn=groups,dc=example,dc=com"
-		BaseDN string `json:"baseDN"`
+		BaseDN string `yaml:"baseDN"`
 
 		// Optional filter to apply when searching the directory. For example "(objectClass=posixGroup)"
-		Filter string `json:"filter"`
+		Filter string `yaml:"filter"`
 
-		Scope string `json:"scope"` // Defaults to "sub"
+		Scope string `yaml:"scope"` // Defaults to "sub"
 
 		// These two fields are use to match a user to a group.
 		//
@@ -111,12 +108,12 @@ type Config struct {
 		//
 		//   (<groupAttr>=<userAttr value>)
 		//
-		UserAttr  string `json:"userAttr"`
-		GroupAttr string `json:"groupAttr"`
+		UserAttr  string `yaml:"userAttr"`
+		GroupAttr string `yaml:"groupAttr"`
 
 		// The attribute of the group that represents its name.
-		NameAttr string `json:"nameAttr"`
-	} `json:"groupSearch"`
+		NameAttr string `yaml:"nameAttr"`
+	} `yaml:"groupSearch"`
 }
 
 func parseScope(s string) (int, bool) {
@@ -170,20 +167,6 @@ func escapeFilter(s string) string {
 
 // Open returns an authentication strategy using LDAP.
 func (c *Config) Open() (connector.Connector, error) {
-	conn, err := c.OpenConnector()
-	if err != nil {
-		return nil, err
-	}
-	return connector.Connector(conn), nil
-}
-
-// OpenConnector is the same as Open but returns a type with all implemented connector interfaces.
-func (c *Config) OpenConnector() (interface {
-	connector.Connector
-	connector.PasswordConnector
-	connector.GroupsConnector
-}, error) {
-
 	requiredFields := []struct {
 		name string
 		val  string
@@ -213,13 +196,10 @@ func (c *Config) OpenConnector() (interface {
 	}
 
 	tlsConfig := new(tls.Config)
-	if c.RootCA != "" || len(c.RootCAData) != 0 {
-		data := c.RootCAData
-		if len(data) == 0 {
-			var err error
-			if data, err = ioutil.ReadFile(c.RootCA); err != nil {
-				return nil, fmt.Errorf("ldap: read ca file: %v", err)
-			}
+	if c.RootCA != "" {
+		data, err := ioutil.ReadFile(c.RootCA)
+		if err != nil {
+			return nil, fmt.Errorf("ldap: read ca file: %v", err)
 		}
 		rootCAs := x509.NewCertPool()
 		if !rootCAs.AppendCertsFromPEM(data) {

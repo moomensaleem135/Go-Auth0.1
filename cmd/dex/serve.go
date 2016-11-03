@@ -10,13 +10,12 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"time"
 
-	"github.com/ghodss/yaml"
 	"github.com/spf13/cobra"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	yaml "gopkg.in/yaml.v2"
 
 	"github.com/coreos/dex/api"
 	"github.com/coreos/dex/server"
@@ -137,11 +136,13 @@ func serve(cmd *cobra.Command, args []string) error {
 		s = storage.WithStaticClients(s, c.StaticClients)
 	}
 	if len(c.StaticPasswords) > 0 {
-		passwords := make([]storage.Password, len(c.StaticPasswords))
-		for i, p := range c.StaticPasswords {
-			passwords[i] = storage.Password(p)
+		p := make([]storage.Password, len(c.StaticPasswords))
+		for i, pw := range c.StaticPasswords {
+			if p[i], err = pw.toPassword(); err != nil {
+				return err
+			}
 		}
-		s = storage.WithStaticPasswords(s, passwords)
+		s = storage.WithStaticPasswords(s, p)
 	}
 
 	serverConfig := server.Config{
@@ -152,20 +153,6 @@ func serve(cmd *cobra.Command, args []string) error {
 		Storage:                s,
 		TemplateConfig:         c.Templates,
 		EnablePasswordDB:       c.EnablePasswordDB,
-	}
-	if c.Expiry.SigningKeys != "" {
-		signingKeys, err := time.ParseDuration(c.Expiry.SigningKeys)
-		if err != nil {
-			return fmt.Errorf("parsing signingKeys expiry: %v", err)
-		}
-		serverConfig.RotateKeysAfter = signingKeys
-	}
-	if c.Expiry.IDTokens != "" {
-		idTokens, err := time.ParseDuration(c.Expiry.IDTokens)
-		if err != nil {
-			return fmt.Errorf("parsing idTokens expiry: %v", err)
-		}
-		serverConfig.IDTokensValidFor = idTokens
 	}
 
 	serv, err := server.NewServer(context.Background(), serverConfig)

@@ -2,10 +2,7 @@ package main
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-
-	"golang.org/x/crypto/bcrypt"
 
 	"github.com/coreos/dex/connector"
 	"github.com/coreos/dex/connector/github"
@@ -21,99 +18,129 @@ import (
 
 // Config is the config format for the main application.
 type Config struct {
-	Issuer     string      `json:"issuer"`
-	Storage    Storage     `json:"storage"`
-	Connectors []Connector `json:"connectors"`
-	Web        Web         `json:"web"`
-	OAuth2     OAuth2      `json:"oauth2"`
-	GRPC       GRPC        `json:"grpc"`
-	Expiry     Expiry      `json:"expiry"`
+	Issuer     string      `yaml:"issuer"`
+	Storage    Storage     `yaml:"storage"`
+	Connectors []Connector `yaml:"connectors"`
+	Web        Web         `yaml:"web"`
+	OAuth2     OAuth2      `yaml:"oauth2"`
+	GRPC       GRPC        `yaml:"grpc"`
 
-	Templates server.TemplateConfig `json:"templates"`
+	Templates server.TemplateConfig `yaml:"templates"`
 
 	// StaticClients cause the server to use this list of clients rather than
 	// querying the storage. Write operations, like creating a client, will fail.
-	StaticClients []storage.Client `json:"staticClients"`
+	StaticClients []storage.Client `yaml:"staticClients"`
 
 	// If enabled, the server will maintain a list of passwords which can be used
 	// to identify a user.
-	EnablePasswordDB bool `json:"enablePasswordDB"`
+	EnablePasswordDB bool `yaml:"enablePasswordDB"`
 
 	// StaticPasswords cause the server use this list of passwords rather than
 	// querying the storage. Cannot be specified without enabling a passwords
 	// database.
-	StaticPasswords []password `json:"staticPasswords"`
+	//
+	// The "password" type is identical to the storage.Password type, but does
+	// unmarshaling into []byte correctly.
+	StaticPasswords []password `yaml:"staticPasswords"`
 }
 
-type password storage.Password
+type password struct {
+	Email    string `yaml:"email"`
+	Username string `yaml:"username"`
+	UserID   string `yaml:"userID"`
 
-func (p *password) UnmarshalJSON(b []byte) error {
-	var data struct {
-		Email    string `json:"email"`
-		Username string `json:"username"`
-		UserID   string `json:"userID"`
-		Hash     string `json:"hash"`
-	}
-	if err := json.Unmarshal(b, &data); err != nil {
-		return err
-	}
-	*p = password(storage.Password{
-		Email:    data.Email,
-		Username: data.Username,
-		UserID:   data.UserID,
-	})
-	if len(data.Hash) == 0 {
-		return fmt.Errorf("no password hash provided")
-	}
+	// Because our YAML parser doesn't base64, we have to do it ourselves.
+	//
+	// TODO(ericchiang): switch to github.com/ghodss/yaml
+	Hash string `yaml:"hash"`
+}
 
-	// If this value is a valid bcrypt, use it.
-	_, bcryptErr := bcrypt.Cost([]byte(data.Hash))
-	if bcryptErr == nil {
-		p.Hash = []byte(data.Hash)
-		return nil
-	}
-
-	// For backwards compatibility try to base64 decode this value.
-	hashBytes, err := base64.StdEncoding.DecodeString(data.Hash)
+// decode the hash appropriately and convert to the storage passwords.
+func (p password) toPassword() (storage.Password, error) {
+	hash, err := base64.StdEncoding.DecodeString(p.Hash)
 	if err != nil {
-		return fmt.Errorf("malformed bcrypt hash: %v", bcryptErr)
+		return storage.Password{}, fmt.Errorf("decoding hash: %v", err)
 	}
-	if _, err := bcrypt.Cost(hashBytes); err != nil {
-		return fmt.Errorf("malformed bcrypt hash: %v", err)
-	}
-	p.Hash = hashBytes
-	return nil
+	return storage.Password{
+		Email:    p.Email,
+		Username: p.Username,
+		UserID:   p.UserID,
+		Hash:     hash,
+	}, nil
 }
 
 // OAuth2 describes enabled OAuth2 extensions.
 type OAuth2 struct {
-	ResponseTypes []string `json:"responseTypes"`
+	ResponseTypes []string `yaml:"responseTypes"`
 	// If specified, do not prompt the user to approve client authorization. The
 	// act of logging in implies authorization.
-	SkipApprovalScreen bool `json:"skipApprovalScreen"`
+	SkipApprovalScreen bool `yaml:"skipApprovalScreen"`
 }
 
 // Web is the config format for the HTTP server.
 type Web struct {
-	HTTP    string `json:"http"`
-	HTTPS   string `json:"https"`
-	TLSCert string `json:"tlsCert"`
-	TLSKey  string `json:"tlsKey"`
+	HTTP    string `yaml:"http"`
+	HTTPS   string `yaml:"https"`
+	TLSCert string `yaml:"tlsCert"`
+	TLSKey  string `yaml:"tlsKey"`
 }
 
 // GRPC is the config for the gRPC API.
 type GRPC struct {
 	// The port to listen on.
-	Addr        string `json:"addr"`
-	TLSCert     string `json:"tlsCert"`
-	TLSKey      string `json:"tlsKey"`
-	TLSClientCA string `json:"tlsClientCA"`
+	Addr        string `yaml:"addr"`
+	TLSCert     string `yaml:"tlsCert"`
+	TLSKey      string `yaml:"tlsKey"`
+	TLSClientCA string `yaml:"tlsClientCA"`
 }
 
 // Storage holds app's storage configuration.
 type Storage struct {
-	Type   string        `json:"type"`
-	Config StorageConfig `json:"config"`
+	Type   string        `yaml:"type"`
+	Config StorageConfig `yaml:"config"`
+}
+
+// UnmarshalYAML allows Storage to unmarshal its config field dynamically
+// depending on the type of storage.
+func (s *Storage) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var storageMeta struct {
+		Type string `yaml:"type"`
+	}
+	if err := unmarshal(&storageMeta); err != nil {
+		return err
+	}
+	s.Type = storageMeta.Type
+	// TODO(ericchiang): replace this with a registration process.
+	var err error
+	switch storageMeta.Type {
+	case "kubernetes":
+		var config struct {
+			Config kubernetes.Config `yaml:"config"`
+		}
+		err = unmarshal(&config)
+		s.Config = &config.Config
+	case "memory":
+		var config struct {
+			Config memory.Config `yaml:"config"`
+		}
+		err = unmarshal(&config)
+		s.Config = &config.Config
+	case "sqlite3":
+		var config struct {
+			Config sql.SQLite3 `yaml:"config"`
+		}
+		err = unmarshal(&config)
+		s.Config = &config.Config
+	case "postgres":
+		var config struct {
+			Config sql.Postgres `yaml:"config"`
+		}
+		err = unmarshal(&config)
+		s.Config = &config.Config
+	default:
+		return fmt.Errorf("unknown storage type %q", storageMeta.Type)
+	}
+	return err
 }
 
 // StorageConfig is a configuration that can create a storage.
@@ -121,49 +148,14 @@ type StorageConfig interface {
 	Open() (storage.Storage, error)
 }
 
-var storages = map[string]func() StorageConfig{
-	"kubernetes": func() StorageConfig { return new(kubernetes.Config) },
-	"memory":     func() StorageConfig { return new(memory.Config) },
-	"sqlite3":    func() StorageConfig { return new(sql.SQLite3) },
-	"postgres":   func() StorageConfig { return new(sql.Postgres) },
-}
-
-// UnmarshalJSON allows Storage to implement the unmarshaler interface to
-// dynamically determine the type of the storage config.
-func (s *Storage) UnmarshalJSON(b []byte) error {
-	var store struct {
-		Type   string          `json:"type"`
-		Config json.RawMessage `json:"config"`
-	}
-	if err := json.Unmarshal(b, &store); err != nil {
-		return fmt.Errorf("parse storage: %v", err)
-	}
-	f, ok := storages[store.Type]
-	if !ok {
-		return fmt.Errorf("unknown storage type %q", store.Type)
-	}
-
-	storageConfig := f()
-	if len(store.Config) != 0 {
-		if err := json.Unmarshal([]byte(store.Config), storageConfig); err != nil {
-			return fmt.Errorf("parse storace config: %v", err)
-		}
-	}
-	*s = Storage{
-		Type:   store.Type,
-		Config: storageConfig,
-	}
-	return nil
-}
-
 // Connector is a magical type that can unmarshal YAML dynamically. The
 // Type field determines the connector type, which is then customized for Config.
 type Connector struct {
-	Type string `json:"type"`
-	Name string `json:"name"`
-	ID   string `json:"id"`
+	Type string `yaml:"type"`
+	Name string `yaml:"name"`
+	ID   string `yaml:"id"`
 
-	Config ConnectorConfig `json:"config"`
+	Config ConnectorConfig `yaml:"config"`
 }
 
 // ConnectorConfig is a configuration that can open a connector.
@@ -171,52 +163,55 @@ type ConnectorConfig interface {
 	Open() (connector.Connector, error)
 }
 
-var connectors = map[string]func() ConnectorConfig{
-	"mockCallback": func() ConnectorConfig { return new(mock.CallbackConfig) },
-	"mockPassword": func() ConnectorConfig { return new(mock.PasswordConfig) },
-	"ldap":         func() ConnectorConfig { return new(ldap.Config) },
-	"github":       func() ConnectorConfig { return new(github.Config) },
-	"oidc":         func() ConnectorConfig { return new(oidc.Config) },
-}
-
-// UnmarshalJSON allows Connector to implement the unmarshaler interface to
-// dynamically determine the type of the connector config.
-func (c *Connector) UnmarshalJSON(b []byte) error {
-	var conn struct {
-		Type string `json:"type"`
-		Name string `json:"name"`
-		ID   string `json:"id"`
-
-		Config json.RawMessage `json:"config"`
+// UnmarshalYAML allows Connector to unmarshal its config field dynamically
+// depending on the type of connector.
+func (c *Connector) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var connectorMetadata struct {
+		Type string `yaml:"type"`
+		Name string `yaml:"name"`
+		ID   string `yaml:"id"`
 	}
-	if err := json.Unmarshal(b, &conn); err != nil {
-		return fmt.Errorf("parse connector: %v", err)
+	if err := unmarshal(&connectorMetadata); err != nil {
+		return err
 	}
-	f, ok := connectors[conn.Type]
-	if !ok {
-		return fmt.Errorf("unknown connector type %q", conn.Type)
-	}
+	c.Type = connectorMetadata.Type
+	c.Name = connectorMetadata.Name
+	c.ID = connectorMetadata.ID
 
-	connConfig := f()
-	if len(conn.Config) != 0 {
-		if err := json.Unmarshal([]byte(conn.Config), connConfig); err != nil {
-			return fmt.Errorf("parse connector config: %v", err)
+	var err error
+	switch c.Type {
+	case "mockCallback":
+		var config struct {
+			Config mock.CallbackConfig `yaml:"config"`
 		}
+		err = unmarshal(&config)
+		c.Config = &config.Config
+	case "mockPassword":
+		var config struct {
+			Config mock.PasswordConfig `yaml:"config"`
+		}
+		err = unmarshal(&config)
+		c.Config = &config.Config
+	case "ldap":
+		var config struct {
+			Config ldap.Config `yaml:"config"`
+		}
+		err = unmarshal(&config)
+		c.Config = &config.Config
+	case "github":
+		var config struct {
+			Config github.Config `yaml:"config"`
+		}
+		err = unmarshal(&config)
+		c.Config = &config.Config
+	case "oidc":
+		var config struct {
+			Config oidc.Config `yaml:"config"`
+		}
+		err = unmarshal(&config)
+		c.Config = &config.Config
+	default:
+		return fmt.Errorf("unknown connector type %q", c.Type)
 	}
-	*c = Connector{
-		Type:   conn.Type,
-		Name:   conn.Name,
-		ID:     conn.ID,
-		Config: connConfig,
-	}
-	return nil
-}
-
-// Expiry holds configuration for the validity period of components.
-type Expiry struct {
-	// SigningKeys defines the duration of time after which the SigningKeys will be rotated.
-	SigningKeys string `json:"signingKeys"`
-
-	// IdTokens defines the duration of time for which the IdTokens will be valid.
-	IDTokens string `json:"idTokens"`
+	return err
 }
