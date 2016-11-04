@@ -39,8 +39,9 @@ connectors:
   name: Google
   config:
     issuer: https://accounts.google.com
-    clientID: foo
-    clientSecret: bar
+    #  Config values starting with a "$" will read from the environment.
+    clientID: $GOOGLE_CLIENT_ID
+    clientSecret: $GOOGLE_CLIENT_SECRET
     redirectURI: http://127.0.0.1:5556/dex/callback/google
 
 enablePasswordDB: true
@@ -95,8 +96,8 @@ expiry:
 				Name: "Google",
 				Config: &oidc.Config{
 					Issuer:       "https://accounts.google.com",
-					ClientID:     "foo",
-					ClientSecret: "bar",
+					ClientID:     "$GOOGLE_CLIENT_ID",
+					ClientSecret: "$GOOGLE_CLIENT_SECRET",
 					RedirectURI:  "http://127.0.0.1:5556/dex/callback/google",
 				},
 			},

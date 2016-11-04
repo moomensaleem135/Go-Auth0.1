@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/ghodss/yaml"
@@ -47,6 +48,7 @@ func serve(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("read config file %s: %v", configFile, err)
 	}
+	configData = []byte(os.ExpandEnv(string(configData)))
 
 	var c Config
 	if err := yaml.Unmarshal(configData, &c); err != nil {
