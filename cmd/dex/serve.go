@@ -113,9 +113,6 @@ func serve(cmd *cobra.Command, args []string) error {
 
 	connectors := make([]server.Connector, len(c.Connectors))
 	for i, conn := range c.Connectors {
-		if conn.ID == "" {
-			return fmt.Errorf("no ID field for connector %d", i)
-		}
 		if conn.Config == nil {
 			return fmt.Errorf("no config field for connector %q", conn.ID)
 		}
