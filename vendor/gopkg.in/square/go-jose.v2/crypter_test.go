@@ -279,40 +279,38 @@ func TestMultiRecipientJWE(t *testing.T) {
 	input := []byte("Lorem ipsum dolor sit amet")
 	obj, err := enc.Encrypt(input)
 	if err != nil {
-		t.Fatal("error in encrypt: ", err)
+		t.Error("error in encrypt: ", err)
+		return
 	}
 
 	msg := obj.FullSerialize()
 
 	parsed, err := ParseEncrypted(msg)
 	if err != nil {
-		t.Fatal("error in parse: ", err)
+		t.Error("error in parse: ", err)
+		return
 	}
 
-	i, _, output, err := parsed.DecryptMulti(rsaTestKey)
+	output, err := parsed.Decrypt(rsaTestKey)
 	if err != nil {
-		t.Fatal("error on decrypt with RSA: ", err)
-	}
-
-	if i != 0 {
-		t.Fatal("recipient index should be 0 for RSA key")
+		t.Error("error on decrypt with RSA: ", err)
+		return
 	}
 
 	if bytes.Compare(input, output) != 0 {
-		t.Fatal("Decrypted output does not match input: ", output, input)
+		t.Error("Decrypted output does not match input: ", output, input)
+		return
 	}
 
-	i, _, output, err = parsed.DecryptMulti(sharedKey)
+	output, err = parsed.Decrypt(sharedKey)
 	if err != nil {
-		t.Fatal("error on decrypt with AES: ", err)
-	}
-
-	if i != 1 {
-		t.Fatal("recipient index should be 1 for shared key")
+		t.Error("error on decrypt with AES: ", err)
+		return
 	}
 
 	if bytes.Compare(input, output) != 0 {
-		t.Fatal("Decrypted output does not match input", output, input)
+		t.Error("Decrypted output does not match input", output, input)
+		return
 	}
 }
 

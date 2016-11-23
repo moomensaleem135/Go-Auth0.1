@@ -28,7 +28,7 @@ import (
 var (
 	app = kingpin.New("jose-util", "A command-line utility for dealing with JOSE objects.")
 
-	keyFile = app.Flag("key", "Path to key file (PEM or DER-encoded)").ExistingFile()
+	keyFile = app.Flag("key", "Path to key file (PEM or DER-encoded)").Required().ExistingFile()
 	inFile  = app.Flag("in", "Path to input file (stdin if missing)").ExistingFile()
 	outFile = app.Flag("out", "Path to output file (stdout if missing)").ExistingFile()
 
@@ -54,12 +54,8 @@ func main() {
 
 	command := kingpin.MustParse(app.Parse(os.Args[1:]))
 
-	var keyBytes []byte
-	var err error
-	if command != "expand" {
-		keyBytes, err = ioutil.ReadFile(*keyFile)
-		exitOnError(err, "unable to read key file")
-	}
+	keyBytes, err := ioutil.ReadFile(*keyFile)
+	exitOnError(err, "unable to read key file")
 
 	switch command {
 	case "encrypt":
@@ -148,7 +144,6 @@ func main() {
 
 		exitOnError(err, "unable to expand message")
 		writeOutput(*outFile, []byte(serialized))
-		writeOutput(*outFile, []byte("\n"))
 	}
 }
 

@@ -17,211 +17,111 @@
 
 package jwt
 
-import (
-	"reflect"
-
-	"gopkg.in/square/go-jose.v2/json"
-
-	"gopkg.in/square/go-jose.v2"
-)
+import "gopkg.in/square/go-jose.v2"
 
 // Builder is a utility for making JSON Web Tokens. Calls can be chained, and
 // errors are accumulated until the final call to CompactSerialize/FullSerialize.
-type Builder interface {
-	// Claims encodes claims into JWE/JWS form. Multiple calls will merge claims
-	// into single JSON object.
-	Claims(i interface{}) Builder
-	// Token builds a JSONWebToken from provided data.
-	Token() (*JSONWebToken, error)
-	// FullSerialize serializes a token using the full serialization format.
-	FullSerialize() (string, error)
-	// CompactSerialize serializes a token using the compact serialization format.
+type Builder struct {
+	transform  func([]byte) (serializer, payload, error)
+	payload    payload
+	serializer serializer
+	err        error
+}
+
+type payload func(interface{}) ([]byte, error)
+
+type serializer interface {
+	FullSerialize() string
 	CompactSerialize() (string, error)
 }
 
-type builder struct {
-	payload map[string]interface{}
-	err     error
-}
-
-type signedBuilder struct {
-	builder
-	sig jose.Signer
-}
-
-type encryptedBuilder struct {
-	builder
-	enc jose.Encrypter
-}
-
 // Signed creates builder for signed tokens.
-func Signed(sig jose.Signer) Builder {
-	return &signedBuilder{
-		sig: sig,
+func Signed(sig jose.Signer) *Builder {
+	return &Builder{
+		transform: func(b []byte) (serializer, payload, error) {
+			s, err := sig.Sign(b)
+			if err != nil {
+				return nil, nil, err
+			}
+			return s, s.Verify, nil
+		},
 	}
 }
 
 // Encrypted creates builder for encrypted tokens.
-func Encrypted(enc jose.Encrypter) Builder {
-	return &encryptedBuilder{
-		enc: enc,
-	}
-}
-
-func (b builder) claims(i interface{}) builder {
-	if b.err != nil {
-		return b
-	}
-
-	m, ok := i.(map[string]interface{})
-	switch {
-	case ok:
-		return b.merge(m)
-	case reflect.Indirect(reflect.ValueOf(i)).Kind() == reflect.Struct:
-		m, err := normalize(i)
-		if err != nil {
-			return builder{
-				err: err,
+func Encrypted(enc jose.Encrypter) *Builder {
+	return &Builder{
+		transform: func(b []byte) (serializer, payload, error) {
+			e, err := enc.Encrypt(b)
+			if err != nil {
+				return nil, nil, err
 			}
+			return e, e.Decrypt, nil
+		},
+	}
+}
+
+// Claims encodes claims into the builder.
+func (b *Builder) Claims(c interface{}) *Builder {
+	if b.transform == nil {
+		panic("Signer/Encrypter not set")
+	}
+
+	if b.payload != nil {
+		panic("Claims already set")
+	}
+
+	raw, err := marshalClaims(c)
+	if err != nil {
+		return &Builder{
+			err: err,
 		}
-		return b.merge(m)
-	default:
-		return builder{
-			err: ErrInvalidClaims,
-		}
+	}
+
+	ser, pl, err := b.transform(raw)
+	return &Builder{
+		transform:  b.transform,
+		serializer: ser,
+		payload:    pl,
+		err:        err,
 	}
 }
 
-func normalize(i interface{}) (map[string]interface{}, error) {
-	m := make(map[string]interface{})
-
-	raw, err := json.Marshal(i)
-	if err != nil {
-		return nil, err
-	}
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return nil, err
-	}
-
-	return m, nil
-}
-
-func (b *builder) merge(m map[string]interface{}) builder {
-	p := make(map[string]interface{})
-	for k, v := range b.payload {
-		p[k] = v
-	}
-	for k, v := range m {
-		p[k] = v
-	}
-
-	return builder{
-		payload: p,
-	}
-}
-
-func (b *builder) token(p func(interface{}) ([]byte, error), h []jose.Header) (*JSONWebToken, error) {
-	return &JSONWebToken{
-		payload: p,
-		Headers: h,
-	}, nil
-}
-
-func (b *signedBuilder) Claims(i interface{}) Builder {
-	return &signedBuilder{
-		builder: b.builder.claims(i),
-		sig:     b.sig,
-	}
-}
-
-func (b *signedBuilder) Token() (*JSONWebToken, error) {
-	sig, err := b.sign()
-	if err != nil {
-		return nil, err
-	}
-
-	h := make([]jose.Header, len(sig.Signatures))
-	for i, v := range sig.Signatures {
-		h[i] = v.Header
-	}
-
-	return b.builder.token(sig.Verify, h)
-}
-
-func (b *signedBuilder) CompactSerialize() (string, error) {
-	sig, err := b.sign()
-	if err != nil {
-		return "", err
-	}
-
-	return sig.CompactSerialize()
-}
-
-func (b *signedBuilder) FullSerialize() (string, error) {
-	sig, err := b.sign()
-	if err != nil {
-		return "", err
-	}
-
-	return sig.FullSerialize(), nil
-}
-
-func (b *signedBuilder) sign() (*jose.JSONWebSignature, error) {
+// Token builds a JSONWebToken from provided data.
+func (b *Builder) Token() (*JSONWebToken, error) {
 	if b.err != nil {
 		return nil, b.err
 	}
 
-	p, err := json.Marshal(b.payload)
-	if err != nil {
-		return nil, err
+	if b.payload == nil {
+		return nil, ErrInvalidClaims
 	}
 
-	return b.sig.Sign(p)
+	return &JSONWebToken{b.payload}, nil
 }
 
-func (b *encryptedBuilder) Claims(i interface{}) Builder {
-	return &encryptedBuilder{
-		builder: b.builder.claims(i),
-		enc:     b.enc,
-	}
-}
-
-func (b *encryptedBuilder) CompactSerialize() (string, error) {
-	enc, err := b.encrypt()
-	if err != nil {
-		return "", err
-	}
-
-	return enc.CompactSerialize()
-}
-
-func (b *encryptedBuilder) FullSerialize() (string, error) {
-	enc, err := b.encrypt()
-	if err != nil {
-		return "", err
-	}
-
-	return enc.FullSerialize(), nil
-}
-
-func (b *encryptedBuilder) Token() (*JSONWebToken, error) {
-	enc, err := b.encrypt()
-	if err != nil {
-		return nil, err
-	}
-
-	return b.builder.token(enc.Decrypt, []jose.Header{enc.Header})
-}
-
-func (b *encryptedBuilder) encrypt() (*jose.JSONWebEncryption, error) {
+// FullSerialize serializes a token using the full serialization format.
+func (b *Builder) FullSerialize() (string, error) {
 	if b.err != nil {
-		return nil, b.err
+		return "", b.err
 	}
 
-	p, err := json.Marshal(b.payload)
-	if err != nil {
-		return nil, err
+	if b.serializer == nil {
+		return "", ErrInvalidClaims
 	}
 
-	return b.enc.Encrypt(p)
+	return b.serializer.FullSerialize(), nil
+}
+
+// CompactSerialize serializes a token using the compact serialization format.
+func (b *Builder) CompactSerialize() (string, error) {
+	if b.err != nil {
+		return "", b.err
+	}
+
+	if b.serializer == nil {
+		return "", ErrInvalidClaims
+	}
+
+	return b.serializer.CompactSerialize()
 }

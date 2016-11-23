@@ -24,8 +24,6 @@ import (
 	"fmt"
 	"io"
 	"testing"
-
-	"gopkg.in/square/go-jose.v2/json"
 )
 
 type staticNonceSource string
@@ -225,45 +223,43 @@ func TestMultiRecipientJWS(t *testing.T) {
 	input := []byte("Lorem ipsum dolor sit amet")
 	obj, err := signer.Sign(input)
 	if err != nil {
-		t.Fatal("error on sign: ", err)
+		t.Error("error on sign: ", err)
+		return
 	}
 
 	_, err = obj.CompactSerialize()
 	if err == nil {
-		t.Fatal("message with multiple recipient was compact serialized")
+		t.Error("message with multiple recipient was compact serialized")
 	}
 
 	msg := obj.FullSerialize()
 
 	obj, err = ParseSigned(msg)
 	if err != nil {
-		t.Fatal("error on parse: ", err)
+		t.Error("error on parse: ", err)
+		return
 	}
 
-	i, _, output, err := obj.VerifyMulti(&rsaTestKey.PublicKey)
+	output, err := obj.Verify(&rsaTestKey.PublicKey)
 	if err != nil {
-		t.Fatal("error on verify: ", err)
-	}
-
-	if i != 0 {
-		t.Fatal("signature index should be 0 for RSA key")
+		t.Error("error on verify: ", err)
+		return
 	}
 
 	if bytes.Compare(output, input) != 0 {
-		t.Fatal("input/output do not match", output, input)
+		t.Error("input/output do not match", output, input)
+		return
 	}
 
-	i, _, output, err = obj.VerifyMulti(sharedKey)
+	output, err = obj.Verify(sharedKey)
 	if err != nil {
-		t.Fatal("error on verify: ", err)
-	}
-
-	if i != 1 {
-		t.Fatal("signature index should be 1 for EC key")
+		t.Error("error on verify: ", err)
+		return
 	}
 
 	if bytes.Compare(output, input) != 0 {
-		t.Fatal("input/output do not match", output, input)
+		t.Error("input/output do not match", output, input)
+		return
 	}
 }
 
@@ -348,12 +344,12 @@ func TestSignerKid(t *testing.T) {
 	}
 
 	var jsonmsi map[string]interface{}
-	err = json.Unmarshal(jsonbar, &jsonmsi)
+	err = UnmarshalJSON(jsonbar, &jsonmsi)
 	if err != nil {
 		t.Error("problem unmarshalling base JWK", err)
 	}
 	jsonmsi["kid"] = kid
-	jsonbar2, err := json.Marshal(jsonmsi)
+	jsonbar2, err := MarshalJSON(jsonmsi)
 	if err != nil {
 		t.Error("problem marshalling kided JWK", err)
 	}
