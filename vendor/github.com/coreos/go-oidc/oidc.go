@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"golang.org/x/net/context/ctxhttp"
 	"golang.org/x/oauth2"
 	jose "gopkg.in/square/go-jose.v2"
 )
@@ -85,7 +84,7 @@ type providerJSON struct {
 // or "https://login.salesforce.com".
 func NewProvider(ctx context.Context, issuer string) (*Provider, error) {
 	wellKnown := strings.TrimSuffix(issuer, "/") + "/.well-known/openid-configuration"
-	resp, err := ctxhttp.Get(ctx, clientFromContext(ctx), wellKnown)
+	resp, err := clientFromContext(ctx).Get(wellKnown)
 	if err != nil {
 		return nil, err
 	}
@@ -162,19 +161,7 @@ func (p *Provider) UserInfo(ctx context.Context, tokenSource oauth2.TokenSource)
 	if p.userInfoURL == "" {
 		return nil, errors.New("oidc: user info endpoint is not supported by this provider")
 	}
-
-	req, err := http.NewRequest("GET", p.userInfoURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("oidc: create GET request: %v", err)
-	}
-
-	token, err := tokenSource.Token()
-	if err != nil {
-		return nil, fmt.Errorf("oidc: get access token: %v", err)
-	}
-	token.SetAuthHeader(req)
-
-	resp, err := ctxhttp.Do(ctx, clientFromContext(ctx), req)
+	resp, err := clientFromContext(ctx).Get(p.userInfoURL)
 	if err != nil {
 		return nil, err
 	}
