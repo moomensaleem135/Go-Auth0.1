@@ -23,8 +23,6 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const exampleAppState = "I wish to wash my irish wristwatch"
-
 type app struct {
 	clientID     string
 	clientSecret string
@@ -243,9 +241,9 @@ func (a *app) handleLogin(w http.ResponseWriter, r *http.Request) {
 	scopes = append(scopes, "openid", "profile", "email")
 	if a.offlineAsScope {
 		scopes = append(scopes, "offline_access")
-		authCodeURL = a.oauth2Config(scopes).AuthCodeURL(exampleAppState)
+		authCodeURL = a.oauth2Config(scopes).AuthCodeURL("")
 	} else {
-		authCodeURL = a.oauth2Config(scopes).AuthCodeURL(exampleAppState, oauth2.AccessTypeOffline)
+		authCodeURL = a.oauth2Config(scopes).AuthCodeURL("", oauth2.AccessTypeOffline)
 	}
 	http.Redirect(w, r, authCodeURL, http.StatusSeeOther)
 }
@@ -253,11 +251,6 @@ func (a *app) handleLogin(w http.ResponseWriter, r *http.Request) {
 func (a *app) handleCallback(w http.ResponseWriter, r *http.Request) {
 	if errMsg := r.FormValue("error"); errMsg != "" {
 		http.Error(w, errMsg+": "+r.FormValue("error_description"), http.StatusBadRequest)
-		return
-	}
-
-	if state := r.FormValue("state"); state != exampleAppState {
-		http.Error(w, fmt.Sprintf("expected state %q got %q", exampleAppState, state), http.StatusBadRequest)
 		return
 	}
 
