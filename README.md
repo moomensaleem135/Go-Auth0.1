@@ -1,6 +1,5 @@
 # dex - A federated OpenID Connect provider
 
-[![Travis](https://api.travis-ci.org/coreos/dex.svg)](https://travis-ci.org/coreos/dex)
 [![GoDoc](https://godoc.org/github.com/coreos/dex?status.svg)](https://godoc.org/github.com/coreos/dex)
 
 ![logo](Documentation/logos/dex-horizontal-color.png)
