@@ -2,10 +2,7 @@ package sql
 
 import (
 	"database/sql"
-	"os"
 	"testing"
-
-	"github.com/Sirupsen/logrus"
 )
 
 func TestMigrate(t *testing.T) {
@@ -15,13 +12,7 @@ func TestMigrate(t *testing.T) {
 	}
 	defer db.Close()
 
-	logger := &logrus.Logger{
-		Out:       os.Stderr,
-		Formatter: &logrus.TextFormatter{DisableColors: true},
-		Level:     logrus.DebugLevel,
-	}
-
-	c := &conn{db, flavorSQLite3, logger}
+	c := &conn{db, flavorSQLite3}
 	for _, want := range []int{len(migrations), 0} {
 		got, err := c.migrate()
 		if err != nil {

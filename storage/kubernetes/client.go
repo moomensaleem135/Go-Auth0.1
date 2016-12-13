@@ -21,7 +21,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/ghodss/yaml"
 	"github.com/gtank/cryptopasta"
 	"golang.org/x/net/context"
@@ -34,7 +33,6 @@ type client struct {
 	client    *http.Client
 	baseURL   string
 	namespace string
-	logger    logrus.FieldLogger
 
 	// Hash function to map IDs (which could span a large range) to Kubernetes names.
 	// While this is not currently upgradable, it could be in the future.
@@ -232,7 +230,7 @@ func (c *client) put(resource, name string, v interface{}) error {
 	return checkHTTPErr(resp, http.StatusOK)
 }
 
-func newClient(cluster k8sapi.Cluster, user k8sapi.AuthInfo, namespace string, logger logrus.FieldLogger) (*client, error) {
+func newClient(cluster k8sapi.Cluster, user k8sapi.AuthInfo, namespace string) (*client, error) {
 	tlsConfig := cryptopasta.DefaultTLSConfig()
 	data := func(b string, file string) ([]byte, error) {
 		if b != "" {
@@ -305,7 +303,6 @@ func newClient(cluster k8sapi.Cluster, user k8sapi.AuthInfo, namespace string, l
 		hash:       func() hash.Hash { return fnv.New64() },
 		namespace:  namespace,
 		apiVersion: "oidc.coreos.com/v1",
-		logger:     logger,
 	}, nil
 }
 

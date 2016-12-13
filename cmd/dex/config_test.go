@@ -59,10 +59,6 @@ staticPasswords:
 expiry:
   signingKeys: "6h"
   idTokens: "24h"
-
-logger:
-  level: "debug"
-  format: "json"
 `)
 
 	want := Config{
@@ -123,10 +119,6 @@ logger:
 		Expiry: Expiry{
 			SigningKeys: "6h",
 			IDTokens:    "24h",
-		},
-		Logger: Logger{
-			Level:  "debug",
-			Format: "json",
 		},
 	}
 

@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"path"
@@ -41,7 +42,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 	t := s.now().Sub(start)
 	if err != nil {
-		s.logger.Errorf("Storage health check failed: %v", err)
+		log.Printf("Storage health check failed: %v", err)
 		http.Error(w, "Health check failed", http.StatusInternalServerError)
 		return
 	}
@@ -52,13 +53,13 @@ func (s *Server) handlePublicKeys(w http.ResponseWriter, r *http.Request) {
 	// TODO(ericchiang): Cache this.
 	keys, err := s.storage.GetKeys()
 	if err != nil {
-		s.logger.Errorf("failed to get keys: %v", err)
+		log.Printf("failed to get keys: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	if keys.SigningKeyPub == nil {
-		s.logger.Errorf("No public keys found.")
+		log.Printf("No public keys found.")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -73,7 +74,7 @@ func (s *Server) handlePublicKeys(w http.ResponseWriter, r *http.Request) {
 
 	data, err := json.MarshalIndent(jwks, "", "  ")
 	if err != nil {
-		s.logger.Errorf("failed to marshal discovery data: %v", err)
+		log.Printf("failed to marshal discovery data: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -136,14 +137,14 @@ func (s *Server) discoveryHandler() (http.HandlerFunc, error) {
 
 // handleAuthorization handles the OAuth2 auth endpoint.
 func (s *Server) handleAuthorization(w http.ResponseWriter, r *http.Request) {
-	authReq, err := s.parseAuthorizationRequest(s.supportedResponseTypes, r)
+	authReq, err := parseAuthorizationRequest(s.storage, s.supportedResponseTypes, r)
 	if err != nil {
 		s.renderError(w, http.StatusInternalServerError, err.Type, err.Description)
 		return
 	}
 	authReq.Expiry = s.now().Add(time.Minute * 30)
 	if err := s.storage.CreateAuthRequest(authReq); err != nil {
-		s.logger.Errorf("Failed to create authorization request: %v", err)
+		log.Printf("Failed to create authorization request: %v", err)
 		s.renderError(w, http.StatusInternalServerError, errServerError, "")
 		return
 	}
@@ -165,9 +166,7 @@ func (s *Server) handleAuthorization(w http.ResponseWriter, r *http.Request) {
 		i++
 	}
 
-	if err := s.templates.login(w, connectorInfos, authReq.ID); err != nil {
-		s.logger.Errorf("Server template error: %v", err)
-	}
+	s.templates.login(w, connectorInfos, authReq.ID)
 }
 
 func (s *Server) handleConnectorLogin(w http.ResponseWriter, r *http.Request) {
@@ -182,8 +181,8 @@ func (s *Server) handleConnectorLogin(w http.ResponseWriter, r *http.Request) {
 
 	authReq, err := s.storage.GetAuthRequest(authReqID)
 	if err != nil {
-		s.logger.Errorf("Failed to get auth request: %v", err)
-		s.renderError(w, http.StatusInternalServerError, errServerError, "Connector Login Error")
+		log.Printf("Failed to get auth request: %v", err)
+		s.renderError(w, http.StatusInternalServerError, errServerError, "")
 		return
 	}
 	scopes := parseScopes(authReq.Scopes)
@@ -196,8 +195,8 @@ func (s *Server) handleConnectorLogin(w http.ResponseWriter, r *http.Request) {
 			return a, nil
 		}
 		if err := s.storage.UpdateAuthRequest(authReqID, updater); err != nil {
-			s.logger.Errorf("Failed to set connector ID on auth request: %v", err)
-			s.renderError(w, http.StatusInternalServerError, errServerError, "Connector Login Error")
+			log.Printf("Failed to set connector ID on auth request: %v", err)
+			s.renderError(w, http.StatusInternalServerError, errServerError, "")
 			return
 		}
 
@@ -208,15 +207,13 @@ func (s *Server) handleConnectorLogin(w http.ResponseWriter, r *http.Request) {
 			// TODO(ericchiang): Is this appropriate or should we also be using a nonce?
 			callbackURL, err := conn.LoginURL(scopes, s.absURL("/callback"), authReqID)
 			if err != nil {
-				s.logger.Errorf("Connector %q returned error when creating callback: %v", connID, err)
-				s.renderError(w, http.StatusInternalServerError, errServerError, "Connector Login Error")
+				log.Printf("Connector %q returned error when creating callback: %v", connID, err)
+				s.renderError(w, http.StatusInternalServerError, errServerError, "")
 				return
 			}
 			http.Redirect(w, r, callbackURL, http.StatusFound)
 		case connector.PasswordConnector:
-			if err := s.templates.password(w, authReqID, r.URL.String(), "", false); err != nil {
-				s.logger.Errorf("Server template error: %v", err)
-			}
+			s.templates.password(w, authReqID, r.URL.String(), "", false)
 		default:
 			s.notFound(w, r)
 		}
@@ -232,20 +229,18 @@ func (s *Server) handleConnectorLogin(w http.ResponseWriter, r *http.Request) {
 
 		identity, ok, err := passwordConnector.Login(r.Context(), scopes, username, password)
 		if err != nil {
-			s.logger.Errorf("Failed to login user: %v", err)
-			s.renderError(w, http.StatusInternalServerError, errServerError, "Connector Login Error")
+			log.Printf("Failed to login user: %v", err)
+			s.renderError(w, http.StatusInternalServerError, errServerError, "")
 			return
 		}
 		if !ok {
-			if err := s.templates.password(w, authReqID, r.URL.String(), username, true); err != nil {
-				s.logger.Errorf("Server template error: %v", err)
-			}
+			s.templates.password(w, authReqID, r.URL.String(), username, true)
 			return
 		}
 		redirectURL, err := s.finalizeLogin(identity, authReq, conn.Connector)
 		if err != nil {
-			s.logger.Errorf("Failed to finalize login: %v", err)
-			s.renderError(w, http.StatusInternalServerError, errServerError, "Connector Login Error")
+			log.Printf("Failed to finalize login: %v", err)
+			s.renderError(w, http.StatusInternalServerError, errServerError, "")
 			return
 		}
 
@@ -265,17 +260,17 @@ func (s *Server) handleConnectorCallback(w http.ResponseWriter, r *http.Request)
 	//   Section: "3.4.3 RelayState"
 	state := r.URL.Query().Get("state")
 	if state == "" {
-		s.renderError(w, http.StatusBadRequest, errInvalidRequest, "No 'state' parameter provided.")
+		s.renderError(w, http.StatusBadRequest, errInvalidRequest, "no 'state' parameter provided")
 		return
 	}
 
 	authReq, err := s.storage.GetAuthRequest(state)
 	if err != nil {
 		if err == storage.ErrNotFound {
-			s.renderError(w, http.StatusBadRequest, errInvalidRequest, "Invalid 'state' parameter provided.")
+			s.renderError(w, http.StatusBadRequest, errInvalidRequest, "invalid 'state' parameter provided")
 			return
 		}
-		s.logger.Errorf("Failed to get auth request: %v", err)
+		log.Printf("Failed to get auth request: %v", err)
 		s.renderError(w, http.StatusInternalServerError, errServerError, "")
 		return
 	}
@@ -293,14 +288,14 @@ func (s *Server) handleConnectorCallback(w http.ResponseWriter, r *http.Request)
 
 	identity, err := callbackConnector.HandleCallback(parseScopes(authReq.Scopes), r)
 	if err != nil {
-		s.logger.Errorf("Failed to authenticate: %v", err)
+		log.Printf("Failed to authenticate: %v", err)
 		s.renderError(w, http.StatusInternalServerError, errServerError, "")
 		return
 	}
 
 	redirectURL, err := s.finalizeLogin(identity, authReq, conn.Connector)
 	if err != nil {
-		s.logger.Errorf("Failed to finalize login: %v", err)
+		log.Printf("Failed to finalize login: %v", err)
 		s.renderError(w, http.StatusInternalServerError, errServerError, "")
 		return
 	}
@@ -332,12 +327,12 @@ func (s *Server) finalizeLogin(identity connector.Identity, authReq storage.Auth
 func (s *Server) handleApproval(w http.ResponseWriter, r *http.Request) {
 	authReq, err := s.storage.GetAuthRequest(r.FormValue("req"))
 	if err != nil {
-		s.logger.Errorf("Failed to get auth request: %v", err)
+		log.Printf("Failed to get auth request: %v", err)
 		s.renderError(w, http.StatusInternalServerError, errServerError, "")
 		return
 	}
 	if !authReq.LoggedIn {
-		s.logger.Errorf("Auth request does not have an identity for approval")
+		log.Printf("Auth request does not have an identity for approval")
 		s.renderError(w, http.StatusInternalServerError, errServerError, "")
 		return
 	}
@@ -350,13 +345,11 @@ func (s *Server) handleApproval(w http.ResponseWriter, r *http.Request) {
 		}
 		client, err := s.storage.GetClient(authReq.ClientID)
 		if err != nil {
-			s.logger.Errorf("Failed to get client %q: %v", authReq.ClientID, err)
+			log.Printf("Failed to get client %q: %v", authReq.ClientID, err)
 			s.renderError(w, http.StatusInternalServerError, errServerError, "")
 			return
 		}
-		if err := s.templates.approval(w, authReq.ID, authReq.Claims.Username, client.Name, authReq.Scopes); err != nil {
-			s.logger.Errorf("Server template error: %v", err)
-		}
+		s.templates.approval(w, authReq.ID, authReq.Claims.Username, client.Name, authReq.Scopes)
 	case "POST":
 		if r.FormValue("approval") != "approve" {
 			s.renderError(w, http.StatusInternalServerError, "approval rejected", "")
@@ -374,7 +367,7 @@ func (s *Server) sendCodeResponse(w http.ResponseWriter, r *http.Request, authRe
 
 	if err := s.storage.DeleteAuthRequest(authReq.ID); err != nil {
 		if err != storage.ErrNotFound {
-			s.logger.Errorf("Failed to delete authorization request: %v", err)
+			log.Printf("Failed to delete authorization request: %v", err)
 			s.renderError(w, http.StatusInternalServerError, errServerError, "")
 		} else {
 			s.renderError(w, http.StatusBadRequest, errInvalidRequest, "Authorization request has already been completed.")
@@ -403,23 +396,21 @@ func (s *Server) sendCodeResponse(w http.ResponseWriter, r *http.Request, authRe
 				ConnectorData: authReq.ConnectorData,
 			}
 			if err := s.storage.CreateAuthCode(code); err != nil {
-				s.logger.Errorf("Failed to create auth code: %v", err)
+				log.Printf("Failed to create auth code: %v", err)
 				s.renderError(w, http.StatusInternalServerError, errServerError, "")
 				return
 			}
 
 			if authReq.RedirectURI == redirectURIOOB {
-				if err := s.templates.oob(w, code.ID); err != nil {
-					s.logger.Errorf("Server template error: %v", err)
-				}
+				s.templates.oob(w, code.ID)
 				return
 			}
 			q.Set("code", code.ID)
 		case responseTypeToken:
 			idToken, expiry, err := s.newIDToken(authReq.ClientID, authReq.Claims, authReq.Scopes, authReq.Nonce)
 			if err != nil {
-				s.logger.Errorf("failed to create ID token: %v", err)
-				s.tokenErrHelper(w, errServerError, "", http.StatusInternalServerError)
+				log.Printf("failed to create ID token: %v", err)
+				tokenErr(w, errServerError, "", http.StatusInternalServerError)
 				return
 			}
 			v := url.Values{}
@@ -442,11 +433,11 @@ func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	if ok {
 		var err error
 		if clientID, err = url.QueryUnescape(clientID); err != nil {
-			s.tokenErrHelper(w, errInvalidRequest, "client_id improperly encoded", http.StatusBadRequest)
+			tokenErr(w, errInvalidRequest, "client_id improperly encoded", http.StatusBadRequest)
 			return
 		}
 		if clientSecret, err = url.QueryUnescape(clientSecret); err != nil {
-			s.tokenErrHelper(w, errInvalidRequest, "client_secret improperly encoded", http.StatusBadRequest)
+			tokenErr(w, errInvalidRequest, "client_secret improperly encoded", http.StatusBadRequest)
 			return
 		}
 	} else {
@@ -457,15 +448,15 @@ func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	client, err := s.storage.GetClient(clientID)
 	if err != nil {
 		if err != storage.ErrNotFound {
-			s.logger.Errorf("failed to get client: %v", err)
-			s.tokenErrHelper(w, errServerError, "", http.StatusInternalServerError)
+			log.Printf("failed to get client: %v", err)
+			tokenErr(w, errServerError, "", http.StatusInternalServerError)
 		} else {
-			s.tokenErrHelper(w, errInvalidClient, "Invalid client credentials.", http.StatusUnauthorized)
+			tokenErr(w, errInvalidClient, "Invalid client credentials.", http.StatusUnauthorized)
 		}
 		return
 	}
 	if client.Secret != clientSecret {
-		s.tokenErrHelper(w, errInvalidClient, "Invalid client credentials.", http.StatusUnauthorized)
+		tokenErr(w, errInvalidClient, "Invalid client credentials.", http.StatusUnauthorized)
 		return
 	}
 
@@ -476,7 +467,7 @@ func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	case grantTypeRefreshToken:
 		s.handleRefreshToken(w, r, client)
 	default:
-		s.tokenErrHelper(w, errInvalidGrant, "", http.StatusBadRequest)
+		tokenErr(w, errInvalidGrant, "", http.StatusBadRequest)
 	}
 }
 
@@ -488,29 +479,29 @@ func (s *Server) handleAuthCode(w http.ResponseWriter, r *http.Request, client s
 	authCode, err := s.storage.GetAuthCode(code)
 	if err != nil || s.now().After(authCode.Expiry) || authCode.ClientID != client.ID {
 		if err != storage.ErrNotFound {
-			s.logger.Errorf("failed to get auth code: %v", err)
-			s.tokenErrHelper(w, errServerError, "", http.StatusInternalServerError)
+			log.Printf("failed to get auth code: %v", err)
+			tokenErr(w, errServerError, "", http.StatusInternalServerError)
 		} else {
-			s.tokenErrHelper(w, errInvalidRequest, "Invalid or expired code parameter.", http.StatusBadRequest)
+			tokenErr(w, errInvalidRequest, "Invalid or expired code parameter.", http.StatusBadRequest)
 		}
 		return
 	}
 
 	if authCode.RedirectURI != redirectURI {
-		s.tokenErrHelper(w, errInvalidRequest, "redirect_uri did not match URI from initial request.", http.StatusBadRequest)
+		tokenErr(w, errInvalidRequest, "redirect_uri did not match URI from initial request.", http.StatusBadRequest)
 		return
 	}
 
 	idToken, expiry, err := s.newIDToken(client.ID, authCode.Claims, authCode.Scopes, authCode.Nonce)
 	if err != nil {
-		s.logger.Errorf("failed to create ID token: %v", err)
-		s.tokenErrHelper(w, errServerError, "", http.StatusInternalServerError)
+		log.Printf("failed to create ID token: %v", err)
+		tokenErr(w, errServerError, "", http.StatusInternalServerError)
 		return
 	}
 
 	if err := s.storage.DeleteAuthCode(code); err != nil {
-		s.logger.Errorf("failed to delete auth code: %v", err)
-		s.tokenErrHelper(w, errServerError, "", http.StatusInternalServerError)
+		log.Printf("failed to delete auth code: %v", err)
+		tokenErr(w, errServerError, "", http.StatusInternalServerError)
 		return
 	}
 
@@ -534,8 +525,8 @@ func (s *Server) handleAuthCode(w http.ResponseWriter, r *http.Request, client s
 			ConnectorData: authCode.ConnectorData,
 		}
 		if err := s.storage.CreateRefresh(refresh); err != nil {
-			s.logger.Errorf("failed to create refresh token: %v", err)
-			s.tokenErrHelper(w, errServerError, "", http.StatusInternalServerError)
+			log.Printf("failed to create refresh token: %v", err)
+			tokenErr(w, errServerError, "", http.StatusInternalServerError)
 			return
 		}
 		refreshToken = refresh.RefreshToken
@@ -548,17 +539,17 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request, clie
 	code := r.PostFormValue("refresh_token")
 	scope := r.PostFormValue("scope")
 	if code == "" {
-		s.tokenErrHelper(w, errInvalidRequest, "No refresh token in request.", http.StatusBadRequest)
+		tokenErr(w, errInvalidRequest, "No refresh token in request.", http.StatusBadRequest)
 		return
 	}
 
 	refresh, err := s.storage.GetRefresh(code)
 	if err != nil || refresh.ClientID != client.ID {
 		if err != storage.ErrNotFound {
-			s.logger.Errorf("failed to get auth code: %v", err)
-			s.tokenErrHelper(w, errServerError, "", http.StatusInternalServerError)
+			log.Printf("failed to get auth code: %v", err)
+			tokenErr(w, errServerError, "", http.StatusInternalServerError)
 		} else {
-			s.tokenErrHelper(w, errInvalidRequest, "Refresh token is invalid or has already been claimed by another client.", http.StatusBadRequest)
+			tokenErr(w, errInvalidRequest, "Refresh token is invalid or has already been claimed by another client.", http.StatusBadRequest)
 		}
 		return
 	}
@@ -588,7 +579,7 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request, clie
 
 		if len(unauthorizedScopes) > 0 {
 			msg := fmt.Sprintf("Requested scopes contain unauthorized scope(s): %q.", unauthorizedScopes)
-			s.tokenErrHelper(w, errInvalidRequest, msg, http.StatusBadRequest)
+			tokenErr(w, errInvalidRequest, msg, http.StatusBadRequest)
 			return
 		}
 		scopes = requestedScopes
@@ -596,8 +587,8 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request, clie
 
 	conn, ok := s.connectors[refresh.ConnectorID]
 	if !ok {
-		s.logger.Errorf("connector ID not found: %q", refresh.ConnectorID)
-		s.tokenErrHelper(w, errServerError, "", http.StatusInternalServerError)
+		log.Printf("connector ID not found: %q", refresh.ConnectorID)
+		tokenErr(w, errServerError, "", http.StatusInternalServerError)
 		return
 	}
 
@@ -617,8 +608,8 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request, clie
 		}
 		ident, err := refreshConn.Refresh(r.Context(), parseScopes(scopes), ident)
 		if err != nil {
-			s.logger.Errorf("failed to refresh identity: %v", err)
-			s.tokenErrHelper(w, errServerError, "", http.StatusInternalServerError)
+			log.Printf("failed to refresh identity: %v", err)
+			tokenErr(w, errServerError, "", http.StatusInternalServerError)
 			return
 		}
 
@@ -634,22 +625,22 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request, clie
 
 	idToken, expiry, err := s.newIDToken(client.ID, refresh.Claims, scopes, refresh.Nonce)
 	if err != nil {
-		s.logger.Errorf("failed to create ID token: %v", err)
-		s.tokenErrHelper(w, errServerError, "", http.StatusInternalServerError)
+		log.Printf("failed to create ID token: %v", err)
+		tokenErr(w, errServerError, "", http.StatusInternalServerError)
 		return
 	}
 
 	// Refresh tokens are claimed exactly once. Delete the current token and
 	// create a new one.
 	if err := s.storage.DeleteRefresh(code); err != nil {
-		s.logger.Errorf("failed to delete auth code: %v", err)
-		s.tokenErrHelper(w, errServerError, "", http.StatusInternalServerError)
+		log.Printf("failed to delete auth code: %v", err)
+		tokenErr(w, errServerError, "", http.StatusInternalServerError)
 		return
 	}
 	refresh.RefreshToken = storage.NewID()
 	if err := s.storage.CreateRefresh(refresh); err != nil {
-		s.logger.Errorf("failed to create refresh token: %v", err)
-		s.tokenErrHelper(w, errServerError, "", http.StatusInternalServerError)
+		log.Printf("failed to create refresh token: %v", err)
+		tokenErr(w, errServerError, "", http.StatusInternalServerError)
 		return
 	}
 	s.writeAccessToken(w, idToken, refresh.RefreshToken, expiry)
@@ -674,8 +665,8 @@ func (s *Server) writeAccessToken(w http.ResponseWriter, idToken, refreshToken s
 	}
 	data, err := json.Marshal(resp)
 	if err != nil {
-		s.logger.Errorf("failed to marshal access token response: %v", err)
-		s.tokenErrHelper(w, errServerError, "", http.StatusInternalServerError)
+		log.Printf("failed to marshal access token response: %v", err)
+		tokenErr(w, errServerError, "", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -689,10 +680,4 @@ func (s *Server) renderError(w http.ResponseWriter, status int, err, description
 
 func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
-}
-
-func (s *Server) tokenErrHelper(w http.ResponseWriter, typ string, description string, statusCode int) {
-	if err := tokenErr(w, typ, description, statusCode); err != nil {
-		s.logger.Errorf("token error repsonse: %v", err)
-	}
 }
