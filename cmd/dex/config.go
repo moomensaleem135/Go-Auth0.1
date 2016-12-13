@@ -8,7 +8,6 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/coreos/dex/connector"
 	"github.com/coreos/dex/connector/github"
 	"github.com/coreos/dex/connector/ldap"
@@ -30,7 +29,6 @@ type Config struct {
 	OAuth2     OAuth2      `json:"oauth2"`
 	GRPC       GRPC        `json:"grpc"`
 	Expiry     Expiry      `json:"expiry"`
-	Logger     Logger      `json:"logger"`
 
 	Frontend server.WebConfig `json:"frontend"`
 
@@ -121,7 +119,7 @@ type Storage struct {
 
 // StorageConfig is a configuration that can create a storage.
 type StorageConfig interface {
-	Open(logrus.FieldLogger) (storage.Storage, error)
+	Open() (storage.Storage, error)
 }
 
 var storages = map[string]func() StorageConfig{
@@ -172,7 +170,7 @@ type Connector struct {
 
 // ConnectorConfig is a configuration that can open a connector.
 type ConnectorConfig interface {
-	Open(logrus.FieldLogger) (connector.Connector, error)
+	Open() (connector.Connector, error)
 }
 
 var connectors = map[string]func() ConnectorConfig{
@@ -224,13 +222,4 @@ type Expiry struct {
 
 	// IdTokens defines the duration of time for which the IdTokens will be valid.
 	IDTokens string `json:"idTokens"`
-}
-
-// Logger holds configuration required to customize logging for dex.
-type Logger struct {
-	// Level sets logging level severity.
-	Level string `json:"level"`
-
-	// Format specifies the format to be used for logging.
-	Format string `json:"format"`
 }

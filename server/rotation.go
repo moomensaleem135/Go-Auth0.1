@@ -7,12 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"time"
 
 	"golang.org/x/net/context"
 	"gopkg.in/square/go-jose.v2"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/coreos/dex/storage"
 )
 
@@ -57,20 +57,18 @@ type keyRotater struct {
 
 	strategy rotationStrategy
 	now      func() time.Time
-
-	logger logrus.FieldLogger
 }
 
 // startKeyRotation begins key rotation in a new goroutine, closing once the context is canceled.
 //
 // The method blocks until after the first attempt to rotate keys has completed. That way
 // healthy storages will return from this call with valid keys.
-func (s *Server) startKeyRotation(ctx context.Context, strategy rotationStrategy, now func() time.Time) {
-	rotater := keyRotater{s.storage, strategy, now, s.logger}
+func startKeyRotation(ctx context.Context, s storage.Storage, strategy rotationStrategy, now func() time.Time) {
+	rotater := keyRotater{s, strategy, now}
 
 	// Try to rotate immediately so properly configured storages will have keys.
 	if err := rotater.rotate(); err != nil {
-		s.logger.Errorf("failed to rotate keys: %v", err)
+		log.Printf("failed to rotate keys: %v", err)
 	}
 
 	go func() {
@@ -80,7 +78,7 @@ func (s *Server) startKeyRotation(ctx context.Context, strategy rotationStrategy
 				return
 			case <-time.After(time.Second * 30):
 				if err := rotater.rotate(); err != nil {
-					s.logger.Errorf("failed to rotate keys: %v", err)
+					log.Printf("failed to rotate keys: %v", err)
 				}
 			}
 		}
@@ -96,7 +94,7 @@ func (k keyRotater) rotate() error {
 	if k.now().Before(keys.NextRotation) {
 		return nil
 	}
-	k.logger.Infof("keys expired, rotating")
+	log.Println("keys expired, rotating")
 
 	// Generate the key outside of a storage transaction.
 	key, err := k.strategy.key()
@@ -156,6 +154,6 @@ func (k keyRotater) rotate() error {
 	if err != nil {
 		return err
 	}
-	k.logger.Infof("keys rotated, next rotation: %s", nextRotation)
+	log.Printf("keys rotated, next rotation: %s", nextRotation)
 	return nil
 }

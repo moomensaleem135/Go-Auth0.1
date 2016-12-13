@@ -13,7 +13,6 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/github"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/coreos/dex/connector"
 )
 
@@ -32,13 +31,12 @@ type Config struct {
 }
 
 // Open returns a strategy for logging in through GitHub.
-func (c *Config) Open(logger logrus.FieldLogger) (connector.Connector, error) {
+func (c *Config) Open() (connector.Connector, error) {
 	return &githubConnector{
 		redirectURI:  c.RedirectURI,
 		org:          c.Org,
 		clientID:     c.ClientID,
 		clientSecret: c.ClientSecret,
-		logger:       logger,
 	}, nil
 }
 
@@ -57,7 +55,6 @@ type githubConnector struct {
 	org          string
 	clientID     string
 	clientSecret string
-	logger       logrus.FieldLogger
 }
 
 func (c *githubConnector) oauth2Config(scopes connector.Scopes) *oauth2.Config {

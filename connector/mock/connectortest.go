@@ -9,13 +9,12 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/coreos/dex/connector"
 )
 
 // NewCallbackConnector returns a mock connector which requires no user interaction. It always returns
 // the same (fake) identity.
-func NewCallbackConnector(logger logrus.FieldLogger) connector.Connector {
+func NewCallbackConnector() connector.Connector {
 	return &Callback{
 		Identity: connector.Identity{
 			UserID:        "0-385-28089-0",
@@ -25,7 +24,6 @@ func NewCallbackConnector(logger logrus.FieldLogger) connector.Connector {
 			Groups:        []string{"authors"},
 			ConnectorData: connectorData,
 		},
-		Logger: logger,
 	}
 }
 
@@ -39,7 +37,6 @@ var (
 type Callback struct {
 	// The returned identity.
 	Identity connector.Identity
-	Logger   logrus.FieldLogger
 }
 
 // LoginURL returns the URL to redirect the user to login with.
@@ -70,8 +67,8 @@ func (m *Callback) Refresh(ctx context.Context, s connector.Scopes, identity con
 type CallbackConfig struct{}
 
 // Open returns an authentication strategy which requires no user interaction.
-func (c *CallbackConfig) Open(logger logrus.FieldLogger) (connector.Connector, error) {
-	return NewCallbackConnector(logger), nil
+func (c *CallbackConfig) Open() (connector.Connector, error) {
+	return NewCallbackConnector(), nil
 }
 
 // PasswordConfig holds the configuration for a mock connector which prompts for the supplied
@@ -82,20 +79,19 @@ type PasswordConfig struct {
 }
 
 // Open returns an authentication strategy which prompts for a predefined username and password.
-func (c *PasswordConfig) Open(logger logrus.FieldLogger) (connector.Connector, error) {
+func (c *PasswordConfig) Open() (connector.Connector, error) {
 	if c.Username == "" {
 		return nil, errors.New("no username supplied")
 	}
 	if c.Password == "" {
 		return nil, errors.New("no password supplied")
 	}
-	return &passwordConnector{c.Username, c.Password, logger}, nil
+	return &passwordConnector{c.Username, c.Password}, nil
 }
 
 type passwordConnector struct {
 	username string
 	password string
-	logger   logrus.FieldLogger
 }
 
 func (p passwordConnector) Close() error { return nil }

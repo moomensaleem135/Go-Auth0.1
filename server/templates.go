@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -177,27 +178,27 @@ func (n byName) Len() int           { return len(n) }
 func (n byName) Less(i, j int) bool { return n[i].Name < n[j].Name }
 func (n byName) Swap(i, j int)      { n[i], n[j] = n[j], n[i] }
 
-func (t *templates) login(w http.ResponseWriter, connectors []connectorInfo, authReqID string) error {
+func (t *templates) login(w http.ResponseWriter, connectors []connectorInfo, authReqID string) {
 	sort.Sort(byName(connectors))
 
 	data := struct {
 		Connectors []connectorInfo
 		AuthReqID  string
 	}{connectors, authReqID}
-	return renderTemplate(w, t.loginTmpl, data)
+	renderTemplate(w, t.loginTmpl, data)
 }
 
-func (t *templates) password(w http.ResponseWriter, authReqID, callback, lastUsername string, lastWasInvalid bool) error {
+func (t *templates) password(w http.ResponseWriter, authReqID, callback, lastUsername string, lastWasInvalid bool) {
 	data := struct {
 		AuthReqID string
 		PostURL   string
 		Username  string
 		Invalid   bool
 	}{authReqID, string(callback), lastUsername, lastWasInvalid}
-	return renderTemplate(w, t.passwordTmpl, data)
+	renderTemplate(w, t.passwordTmpl, data)
 }
 
-func (t *templates) approval(w http.ResponseWriter, authReqID, username, clientName string, scopes []string) error {
+func (t *templates) approval(w http.ResponseWriter, authReqID, username, clientName string, scopes []string) {
 	accesses := []string{}
 	for _, scope := range scopes {
 		access, ok := scopeDescriptions[scope]
@@ -212,17 +213,17 @@ func (t *templates) approval(w http.ResponseWriter, authReqID, username, clientN
 		AuthReqID string
 		Scopes    []string
 	}{username, clientName, authReqID, accesses}
-	return renderTemplate(w, t.approvalTmpl, data)
+	renderTemplate(w, t.approvalTmpl, data)
 }
 
-func (t *templates) oob(w http.ResponseWriter, code string) error {
+func (t *templates) oob(w http.ResponseWriter, code string) {
 	data := struct {
 		Code string
 	}{code}
-	return renderTemplate(w, t.oobTmpl, data)
+	renderTemplate(w, t.oobTmpl, data)
 }
 
-// small io.Writer utilitiy to determine if executing the template wrote to the underlying response writer.
+// small io.Writer utility to determine if executing the template wrote to the underlying response writer.
 type writeRecorder struct {
 	wrote bool
 	w     io.Writer
@@ -233,14 +234,15 @@ func (w *writeRecorder) Write(p []byte) (n int, err error) {
 	return w.w.Write(p)
 }
 
-func renderTemplate(w http.ResponseWriter, tmpl *template.Template, data interface{}) error {
+func renderTemplate(w http.ResponseWriter, tmpl *template.Template, data interface{}) {
 	wr := &writeRecorder{w: w}
 	if err := tmpl.Execute(wr, data); err != nil {
+		log.Printf("Error rendering template %s: %s", tmpl.Name(), err)
+
 		if !wr.wrote {
 			// TODO(ericchiang): replace with better internal server error.
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 		}
-		return fmt.Errorf("Error rendering template %s: %s", tmpl.Name(), err)
 	}
-	return nil
+	return
 }
