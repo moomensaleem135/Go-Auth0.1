@@ -17,7 +17,6 @@ const (
 	tmplLogin    = "login.html"
 	tmplPassword = "password.html"
 	tmplOOB      = "oob.html"
-	tmplError    = "error.html"
 )
 
 var requiredTmpls = []string{
@@ -25,7 +24,6 @@ var requiredTmpls = []string{
 	tmplLogin,
 	tmplPassword,
 	tmplOOB,
-	tmplError,
 }
 
 type templates struct {
@@ -33,7 +31,6 @@ type templates struct {
 	approvalTmpl *template.Template
 	passwordTmpl *template.Template
 	oobTmpl      *template.Template
-	errorTmpl    *template.Template
 }
 
 type webConfig struct {
@@ -159,7 +156,6 @@ func loadTemplates(c webConfig, templatesDir string) (*templates, error) {
 		approvalTmpl: tmpls.Lookup(tmplApproval),
 		passwordTmpl: tmpls.Lookup(tmplPassword),
 		oobTmpl:      tmpls.Lookup(tmplOOB),
-		errorTmpl:    tmpls.Lookup(tmplError),
 	}, nil
 }
 
@@ -224,14 +220,6 @@ func (t *templates) oob(w http.ResponseWriter, code string) error {
 		Code string
 	}{code}
 	return renderTemplate(w, t.oobTmpl, data)
-}
-
-func (t *templates) err(w http.ResponseWriter, errType string, errMsg string) error {
-	data := struct {
-		ErrType string
-		ErrMsg  string
-	}{errType, errMsg}
-	return renderTemplate(w, t.errorTmpl, data)
 }
 
 // small io.Writer utility to determine if executing the template wrote to the underlying response writer.
