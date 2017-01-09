@@ -144,12 +144,23 @@ func (s *Server) discoveryHandler() (http.Handler, error) {
 
 // handleAuthorization handles the OAuth2 auth endpoint.
 func (s *Server) handleAuthorization(w http.ResponseWriter, r *http.Request) {
-	authReq, err := s.parseAuthorizationRequest(s.supportedResponseTypes, r)
+	authReq, err := s.parseAuthorizationRequest(r)
 	if err != nil {
 		s.logger.Errorf("Failed to parse authorization request: %v", err)
-		s.renderError(w, http.StatusInternalServerError, "Failed to connect to the database.")
+		if handler, ok := err.Handle(); ok {
+			// client_id and redirect_uri checked out and we can redirect back to
+			// the client with the error.
+			handler.ServeHTTP(w, r)
+			return
+		}
+
+		// Otherwise render the error to the user.
+		//
+		// TODO(ericchiang): Should we just always render the error?
+		s.renderError(w, err.Status(), err.Error())
 		return
 	}
+
 	authReq.Expiry = s.now().Add(time.Minute * 30)
 	if err := s.storage.CreateAuthRequest(authReq); err != nil {
 		s.logger.Errorf("Failed to create authorization request: %v", err)
@@ -227,31 +238,6 @@ func (s *Server) handleConnectorLogin(w http.ResponseWriter, r *http.Request) {
 			if err := s.templates.password(w, authReqID, r.URL.String(), "", false); err != nil {
 				s.logger.Errorf("Server template error: %v", err)
 			}
-		case connector.SAMLConnector:
-			action, value, err := conn.POSTData(scopes)
-			if err != nil {
-				s.logger.Errorf("Creating SAML data: %v", err)
-				s.renderError(w, http.StatusInternalServerError, "Connector Login Error")
-				return
-			}
-
-			// TODO(ericchiang): Don't inline this.
-			fmt.Fprintf(w, `<!DOCTYPE html>
-			  <html lang="en">
-			  <head>
-			    <meta http-equiv="content-type" content="text/html; charset=utf-8">
-			    <title>SAML login</title>
-			  </head>
-			  <body>
-			    <form method="post" action="%s" >
-				    <input type="hidden" name="SAMLRequest" value="%s" />
-				    <input type="hidden" name="RelayState" value="%s" />
-			    </form>
-				<script>
-				    document.forms[0].submit();
-				</script>
-			  </body>
-			  </html>`, action, value, authReqID)
 		default:
 			s.renderError(w, http.StatusBadRequest, "Requested resource does not exist.")
 		}
@@ -291,24 +277,20 @@ func (s *Server) handleConnectorLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleConnectorCallback(w http.ResponseWriter, r *http.Request) {
-	var authID string
-	switch r.Method {
-	case "GET": // OAuth2 callback
-		if authID = r.URL.Query().Get("state"); authID == "" {
-			s.renderError(w, http.StatusBadRequest, "User session error.")
-			return
-		}
-	case "POST": // SAML POST binding
-		if authID = r.PostFormValue("RelayState"); authID == "" {
-			s.renderError(w, http.StatusBadRequest, "User session error.")
-			return
-		}
-	default:
-		s.renderError(w, http.StatusBadRequest, "Method not supported")
+	// SAML redirect bindings use the "RelayState" URL query field. When we support
+	// SAML, we'll have to check that field too and possibly let callback connectors
+	// indicate which field is used to determine the state.
+	//
+	// See:
+	//   https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf
+	//   Section: "3.4.3 RelayState"
+	state := r.URL.Query().Get("state")
+	if state == "" {
+		s.renderError(w, http.StatusBadRequest, "User session error.")
 		return
 	}
 
-	authReq, err := s.storage.GetAuthRequest(authID)
+	authReq, err := s.storage.GetAuthRequest(state)
 	if err != nil {
 		if err == storage.ErrNotFound {
 			s.logger.Errorf("Invalid 'state' parameter provided: %v", err)
@@ -325,28 +307,13 @@ func (s *Server) handleConnectorCallback(w http.ResponseWriter, r *http.Request)
 		s.renderError(w, http.StatusInternalServerError, "Requested resource does not exist.")
 		return
 	}
-
-	var identity connector.Identity
-	switch conn := conn.Connector.(type) {
-	case connector.CallbackConnector:
-		if r.Method != "GET" {
-			s.logger.Errorf("SAML request mapped to OAuth2 connector")
-			s.renderError(w, http.StatusBadRequest, "Invalid request")
-			return
-		}
-		identity, err = conn.HandleCallback(parseScopes(authReq.Scopes), r)
-	case connector.SAMLConnector:
-		if r.Method != "POST" {
-			s.logger.Errorf("OAuth2 request mapped to SAML connector")
-			s.renderError(w, http.StatusBadRequest, "Invalid request")
-			return
-		}
-		identity, err = conn.HandlePOST(parseScopes(authReq.Scopes), r.PostFormValue("SAMLResponse"))
-	default:
+	callbackConnector, ok := conn.Connector.(connector.CallbackConnector)
+	if !ok {
 		s.renderError(w, http.StatusInternalServerError, "Requested resource does not exist.")
 		return
 	}
 
+	identity, err := callbackConnector.HandleCallback(parseScopes(authReq.Scopes), r)
 	if err != nil {
 		s.logger.Errorf("Failed to authenticate: %v", err)
 		s.renderError(w, http.StatusInternalServerError, "Failed to return user's identity.")
@@ -441,12 +408,25 @@ func (s *Server) sendCodeResponse(w http.ResponseWriter, r *http.Request, authRe
 		s.renderError(w, http.StatusInternalServerError, "Invalid redirect URI.")
 		return
 	}
-	q := u.Query()
+
+	var (
+		// Was the initial request using the implicit or hybrid flow instead of
+		// the "normal" code flow?
+		implicitOrHybrid = false
+
+		// Only present in hybrid or code flow. code.ID == "" if this is not set.
+		code storage.AuthCode
+
+		// ID token returned immediately if the response_type includes "id_token".
+		// Only valid for implicit and hybrid flows.
+		idToken       string
+		idTokenExpiry time.Time
+	)
 
 	for _, responseType := range authReq.ResponseTypes {
 		switch responseType {
 		case responseTypeCode:
-			code := storage.AuthCode{
+			code = storage.AuthCode{
 				ID:            storage.NewID(),
 				ClientID:      authReq.ClientID,
 				ConnectorID:   authReq.ConnectorID,
@@ -463,32 +443,73 @@ func (s *Server) sendCodeResponse(w http.ResponseWriter, r *http.Request, authRe
 				return
 			}
 
+			// Implicit and hybrid flows that try to use the OOB redirect URI are
+			// rejected earlier. If we got here we're using the code flow.
 			if authReq.RedirectURI == redirectURIOOB {
 				if err := s.templates.oob(w, code.ID); err != nil {
 					s.logger.Errorf("Server template error: %v", err)
 				}
 				return
 			}
-			q.Set("code", code.ID)
 		case responseTypeToken:
-			idToken, expiry, err := s.newIDToken(authReq.ClientID, authReq.Claims, authReq.Scopes, authReq.Nonce)
+			implicitOrHybrid = true
+		case responseTypeIDToken:
+			implicitOrHybrid = true
+			var err error
+			idToken, idTokenExpiry, err = s.newIDToken(authReq.ClientID, authReq.Claims, authReq.Scopes, authReq.Nonce)
 			if err != nil {
 				s.logger.Errorf("failed to create ID token: %v", err)
 				s.tokenErrHelper(w, errServerError, "", http.StatusInternalServerError)
 				return
 			}
-			v := url.Values{}
-			v.Set("access_token", storage.NewID())
-			v.Set("token_type", "bearer")
-			v.Set("id_token", idToken)
-			v.Set("state", authReq.State)
-			v.Set("expires_in", strconv.Itoa(int(expiry.Sub(s.now()).Seconds())))
-			u.Fragment = v.Encode()
 		}
 	}
 
-	q.Set("state", authReq.State)
-	u.RawQuery = q.Encode()
+	if implicitOrHybrid {
+		v := url.Values{}
+		v.Set("access_token", storage.NewID())
+		v.Set("token_type", "bearer")
+		v.Set("state", authReq.State)
+		if idToken != "" {
+			v.Set("id_token", idToken)
+			// The hybrid flow with only "code token" or "code id_token" doesn't return an
+			// "expires_in" value. If "code" wasn't provided, indicating the implicit flow,
+			// don't add it.
+			//
+			// https://openid.net/specs/openid-connect-core-1_0.html#HybridAuthResponse
+			if code.ID == "" {
+				v.Set("expires_in", strconv.Itoa(int(idTokenExpiry.Sub(s.now()).Seconds())))
+			}
+		}
+		if code.ID != "" {
+			v.Set("code", code.ID)
+		}
+
+		// Implicit and hybrid flows return their values as part of the fragment.
+		//
+		//   HTTP/1.1 303 See Other
+		//   Location: https://client.example.org/cb#
+		//     access_token=SlAV32hkKG
+		//     &token_type=bearer
+		//     &id_token=eyJ0 ... NiJ9.eyJ1c ... I6IjIifX0.DeWt4Qu ... ZXso
+		//     &expires_in=3600
+		//     &state=af0ifjsldkj
+		//
+		u.Fragment = v.Encode()
+	} else {
+		// The code flow add values to the URL query.
+		//
+		//   HTTP/1.1 303 See Other
+		//   Location: https://client.example.org/cb?
+		//     code=SplxlOBeZQQYbYS6WxSbIA
+		//     &state=af0ifjsldkj
+		//
+		q := u.Query()
+		q.Set("code", code.ID)
+		q.Set("state", authReq.State)
+		u.RawQuery = q.Encode()
+	}
+
 	http.Redirect(w, r, u.String(), http.StatusSeeOther)
 }
 

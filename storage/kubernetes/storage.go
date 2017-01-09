@@ -162,12 +162,11 @@ func (cli *client) CreateRefresh(r storage.RefreshToken) error {
 			Name:      r.RefreshToken,
 			Namespace: cli.namespace,
 		},
-		ClientID:      r.ClientID,
-		ConnectorID:   r.ConnectorID,
-		Scopes:        r.Scopes,
-		Nonce:         r.Nonce,
-		Claims:        fromStorageClaims(r.Claims),
-		ConnectorData: r.ConnectorData,
+		ClientID:    r.ClientID,
+		ConnectorID: r.ConnectorID,
+		Scopes:      r.Scopes,
+		Nonce:       r.Nonce,
+		Claims:      fromStorageClaims(r.Claims),
 	}
 	return cli.post(resourceRefreshToken, refresh)
 }
@@ -244,13 +243,12 @@ func (cli *client) GetRefresh(id string) (storage.RefreshToken, error) {
 		return storage.RefreshToken{}, err
 	}
 	return storage.RefreshToken{
-		RefreshToken:  r.ObjectMeta.Name,
-		ClientID:      r.ClientID,
-		ConnectorID:   r.ConnectorID,
-		Scopes:        r.Scopes,
-		Nonce:         r.Nonce,
-		Claims:        toStorageClaims(r.Claims),
-		ConnectorData: r.ConnectorData,
+		RefreshToken: r.ObjectMeta.Name,
+		ClientID:     r.ClientID,
+		ConnectorID:  r.ConnectorID,
+		Scopes:       r.Scopes,
+		Nonce:        r.Nonce,
+		Claims:       toStorageClaims(r.Claims),
 	}, nil
 }
 

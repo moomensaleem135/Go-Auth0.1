@@ -241,15 +241,12 @@ func (a *app) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	authCodeURL := ""
 	scopes = append(scopes, "openid", "profile", "email")
-	if r.FormValue("offline_acecss") != "yes" {
-		authCodeURL = a.oauth2Config(scopes).AuthCodeURL(exampleAppState)
-	} else if a.offlineAsScope {
+	if a.offlineAsScope {
 		scopes = append(scopes, "offline_access")
 		authCodeURL = a.oauth2Config(scopes).AuthCodeURL(exampleAppState)
 	} else {
 		authCodeURL = a.oauth2Config(scopes).AuthCodeURL(exampleAppState, oauth2.AccessTypeOffline)
 	}
-
 	http.Redirect(w, r, authCodeURL, http.StatusSeeOther)
 }
 
