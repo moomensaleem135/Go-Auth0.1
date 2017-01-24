@@ -333,10 +333,7 @@ func (s *Server) newIDToken(clientID string, claims storage.Claims, scopes []str
 
 // parse the initial request from the OAuth2 client.
 func (s *Server) parseAuthorizationRequest(r *http.Request) (req storage.AuthRequest, oauth2Err *authErr) {
-	if err := r.ParseForm(); err != nil {
-		return req, &authErr{"", "", errInvalidRequest, "Failed to parse request body."}
-	}
-	q := r.Form
+	q := r.URL.Query()
 	redirectURI, err := url.QueryUnescape(q.Get("redirect_uri"))
 	if err != nil {
 		return req, &authErr{"", "", errInvalidRequest, "No redirect_uri provided."}
