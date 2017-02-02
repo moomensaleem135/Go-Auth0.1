@@ -2,10 +2,8 @@ package server
 
 import (
 	"context"
-	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strings"
 	"testing"
 
 	jose "gopkg.in/square/go-jose.v2"
@@ -18,8 +16,6 @@ func TestParseAuthorizationRequest(t *testing.T) {
 		name                   string
 		clients                []storage.Client
 		supportedResponseTypes []string
-
-		usePOST bool
 
 		queryParams map[string]string
 
@@ -40,23 +36,6 @@ func TestParseAuthorizationRequest(t *testing.T) {
 				"response_type": "code",
 				"scope":         "openid email profile",
 			},
-		},
-		{
-			name: "POST request",
-			clients: []storage.Client{
-				{
-					ID:           "foo",
-					RedirectURIs: []string{"https://example.com/foo"},
-				},
-			},
-			supportedResponseTypes: []string{"code"},
-			queryParams: map[string]string{
-				"client_id":     "foo",
-				"redirect_uri":  "https://example.com/foo",
-				"response_type": "code",
-				"scope":         "openid email profile",
-			},
-			usePOST: true,
 		},
 		{
 			name: "invalid client id",
@@ -160,14 +139,7 @@ func TestParseAuthorizationRequest(t *testing.T) {
 				params.Set(k, v)
 			}
 
-			var req *http.Request
-			if tc.usePOST {
-				body := strings.NewReader(params.Encode())
-				req = httptest.NewRequest("POST", httpServer.URL+"/auth", body)
-				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-			} else {
-				req = httptest.NewRequest("GET", httpServer.URL+"/auth?"+params.Encode(), nil)
-			}
+			req := httptest.NewRequest("GET", httpServer.URL+"/auth?"+params.Encode(), nil)
 			_, err := server.parseAuthorizationRequest(req)
 			if err != nil && !tc.wantErr {
 				t.Errorf("%s: %v", tc.name, err)

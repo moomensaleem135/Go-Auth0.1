@@ -136,9 +136,6 @@ func serve(cmd *cobra.Command, args []string) error {
 		if conn.Config == nil {
 			return fmt.Errorf("invalid config: no config field for connector %q", conn.ID)
 		}
-		if conn.Name == "" {
-			return fmt.Errorf("invalid config: no Name field for connector %q", conn.ID)
-		}
 		logger.Infof("config connector: %s", conn.ID)
 
 		connectorLogger := logger.WithField("connector", conn.Name)
