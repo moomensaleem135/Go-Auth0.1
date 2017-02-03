@@ -12,14 +12,17 @@ There are known issues with the XML signature validation for this connector. In 
 
 The connector doesn't support signed AuthnRequests or encrypted attributes.
 
-The connector doesn't support refresh tokens since the SAML 2.0 protocol doesn't provide a way to requery a provider without interaction.
+The connector doesn't support refresh tokens since the SAML 2.0 protocol doesn't provide a way to requery a provider without interaction. Ensure that the "offline_access" scope is not requested in client apps.
 
 ## Configuration
 
 ```yaml
 connectors:
 - type: samlExperimental # will be changed to "saml" later without support for the "samlExperimental" value
+  # Required field for connector id.
   id: saml
+  # Required field for connector name.
+  name: SAML
   config:
     # Issuer used for validating the SAML response.
     issuer: https://saml.example.com
@@ -31,7 +34,7 @@ connectors:
 
     # CA's can also be provided inline as a base64'd blob. 
     #
-    # catData: ( RAW base64'd PEM encoded CA )
+    # caData: ( RAW base64'd PEM encoded CA )
 
     # To skip signature validation, uncomment the following field. This should
     # only be used during testing and may be removed in the future.
