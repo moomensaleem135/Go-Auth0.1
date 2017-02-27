@@ -20,7 +20,7 @@ apiVersion: extensions/v1beta1
 metadata:
   name: o-auth2-client.oidc.coreos.com
 versions:
-  - name: v1
+  - v1
 description: "An OAuth2 client."
 ```
 
