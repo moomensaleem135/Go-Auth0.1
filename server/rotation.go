@@ -22,9 +22,8 @@ type rotationStrategy struct {
 	// Time between rotations.
 	rotationFrequency time.Duration
 
-	// After being rotated how long should the key be kept around for validating
-	// signatues?
-	idTokenValidFor time.Duration
+	// After being rotated how long can a key validate signatues?
+	verifyFor time.Duration
 
 	// Keys are always RSA keys. Though cryptopasta recommends ECDSA keys, not every
 	// client may support these (e.g. github.com/coreos/go-oidc/oidc).
@@ -36,17 +35,17 @@ func staticRotationStrategy(key *rsa.PrivateKey) rotationStrategy {
 	return rotationStrategy{
 		// Setting these values to 100 years is easier than having a flag indicating no rotation.
 		rotationFrequency: time.Hour * 8760 * 100,
-		idTokenValidFor:   time.Hour * 8760 * 100,
+		verifyFor:         time.Hour * 8760 * 100,
 		key:               func() (*rsa.PrivateKey, error) { return key, nil },
 	}
 }
 
 // defaultRotationStrategy returns a strategy which rotates keys every provided period,
 // holding onto the public parts for some specified amount of time.
-func defaultRotationStrategy(rotationFrequency, idTokenValidFor time.Duration) rotationStrategy {
+func defaultRotationStrategy(rotationFrequency, verifyFor time.Duration) rotationStrategy {
 	return rotationStrategy{
 		rotationFrequency: rotationFrequency,
-		idTokenValidFor:   idTokenValidFor,
+		verifyFor:         verifyFor,
 		key: func() (*rsa.PrivateKey, error) {
 			return rsa.GenerateKey(rand.Reader, 2048)
 		},
@@ -129,14 +128,11 @@ func (k keyRotater) rotate() error {
 			return storage.Keys{}, errors.New("keys already rotated")
 		}
 
-		expired := func(key storage.VerificationKey) bool {
-			return tNow.After(key.Expiry)
-		}
-
-		// Remove any verification keys that have expired.
+		// Remove expired verification keys.
 		i := 0
+
 		for _, key := range keys.VerificationKeys {
-			if !expired(key) {
+			if !key.Expiry.After(tNow) {
 				keys.VerificationKeys[i] = key
 				i++
 			}
@@ -144,15 +140,10 @@ func (k keyRotater) rotate() error {
 		keys.VerificationKeys = keys.VerificationKeys[:i]
 
 		if keys.SigningKeyPub != nil {
-			// Move current signing key to a verification only key, throwing
-			// away the private part.
+			// Move current signing key to a verification only key.
 			verificationKey := storage.VerificationKey{
 				PublicKey: keys.SigningKeyPub,
-				// After demoting the signing key, keep the token around for at least
-				// the amount of time an ID Token is valid for. This ensures the
-				// verification key won't expire until all ID Tokens it's signed
-				// expired as well.
-				Expiry: tNow.Add(k.strategy.idTokenValidFor),
+				Expiry:    tNow.Add(k.strategy.verifyFor),
 			}
 			keys.VerificationKeys = append(keys.VerificationKeys, verificationKey)
 		}
