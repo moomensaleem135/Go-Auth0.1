@@ -341,7 +341,7 @@ func (p *provider) HandlePOST(s connector.Scopes, samlResponse string) (ident co
 			if !ok {
 				return ident, fmt.Errorf("no attribute with name %q", p.groupsAttr)
 			}
-			// TODO(ericchiang): Do we need to further trim whitespace?
+			// TOOD(ericchiang): Do we need to further trim whitespace?
 			ident.Groups = strings.Split(groupsStr, p.groupsDelim)
 		} else {
 			groups, ok := attributes.all(p.groupsAttr)
