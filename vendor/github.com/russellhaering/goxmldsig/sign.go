@@ -89,7 +89,7 @@ func (ctx *SigningContext) constructSignedInfo(el *etree.Element, enveloped bool
 	// /SignedInfo/Reference
 	reference := ctx.createNamespacedElement(signedInfo, ReferenceTag)
 
-	dataId := el.SelectAttrValue(ctx.IdAttribute, "")
+	dataId := el.SelectAttrValue(DefaultIdAttr, "")
 	if dataId == "" {
 		return nil, errors.New("Missing data ID")
 	}

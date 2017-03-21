@@ -5,21 +5,15 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"regexp"
 
 	"github.com/beevik/etree"
-	"github.com/russellhaering/goxmldsig/etreeutils"
 )
 
 var uriRegexp = regexp.MustCompile("^#[a-zA-Z_][\\w.-]*$")
-
-var (
-	// ErrMissingSignature indicates that no enveloped signature was found referencing
-	// the top level element passed for signature verification.
-	ErrMissingSignature = errors.New("Missing signature referencing the top-level element")
-)
 
 type ValidationContext struct {
 	CertificateStore X509CertificateStore
@@ -192,7 +186,21 @@ func (ctx *ValidationContext) verifySignedInfo(signatureElement *etree.Element, 
 	return nil
 }
 
-func (ctx *ValidationContext) validateSignature(el, sig *etree.Element, cert *x509.Certificate) (*etree.Element, error) {
+func (ctx *ValidationContext) validateSignature(el *etree.Element, cert *x509.Certificate) (*etree.Element, error) {
+	el = el.Copy()
+
+	// Verify the document minus the signedInfo against the 'DigestValue'
+	// Find the 'Signature' element
+	sig := el.FindElement(SignatureTag)
+
+	if sig == nil {
+		return nil, errors.New("Missing Signature")
+	}
+
+	if !inNamespace(sig, Namespace) {
+		return nil, errors.New("Signature element is in the wrong namespace")
+	}
+
 	// Get the 'SignedInfo' element
 	signedInfo := sig.FindElement(childPath(sig.Space, SignedInfoTag))
 	if signedInfo == nil {
@@ -214,6 +222,10 @@ func (ctx *ValidationContext) validateSignature(el, sig *etree.Element, cert *x5
 		// TODO(russell_h): It is permissible to leave this out. We should be
 		// able to fall back to finding the referenced element some other way.
 		return nil, errors.New("Reference is missing URI attribute")
+	}
+
+	if !uriRegexp.MatchString(uri.Value) {
+		return nil, errors.New("Invalid URI: " + uri.Value)
 	}
 
 	// Get the element referenced in the 'SignedInfo'
@@ -299,83 +311,67 @@ func contains(roots []*x509.Certificate, cert *x509.Certificate) bool {
 	return false
 }
 
-// findSignature searches for a Signature element referencing the passed root element.
-func (ctx *ValidationContext) findSignature(el *etree.Element) (*etree.Element, error) {
+func (ctx *ValidationContext) verifyCertificate(el *etree.Element) (*x509.Certificate, error) {
+	now := ctx.Clock.Now()
+	el = el.Copy()
+
 	idAttr := el.SelectAttr(DefaultIdAttr)
 	if idAttr == nil || idAttr.Value == "" {
 		return nil, errors.New("Missing ID attribute")
 	}
 
+	signatureElements := el.FindElements("//" + SignatureTag)
 	var signatureElement *etree.Element
 
-	err := etreeutils.NSFindIterate(el, Namespace, SignatureTag, func(sig *etree.Element) error {
-		signedInfo := sig.FindElement(childPath(sig.Space, SignedInfoTag))
+	// Find the Signature element that references the whole Response element
+	for _, e := range signatureElements {
+		e2 := e.Copy()
+
+		signedInfo := e2.FindElement(childPath(e2.Space, SignedInfoTag))
 		if signedInfo == nil {
-			return errors.New("Missing SignedInfo")
+			return nil, errors.New("Missing SignedInfo")
 		}
 
-		referenceElement := signedInfo.FindElement(childPath(sig.Space, ReferenceTag))
+		referenceElement := signedInfo.FindElement(childPath(e2.Space, ReferenceTag))
 		if referenceElement == nil {
-			return errors.New("Missing Reference Element")
+			return nil, errors.New("Missing Reference Element")
 		}
 
 		uriAttr := referenceElement.SelectAttr(URIAttr)
 		if uriAttr == nil || uriAttr.Value == "" {
-			return errors.New("Missing URI attribute")
-		}
-
-		if !uriRegexp.MatchString(uriAttr.Value) {
-			return errors.New("Invalid URI: " + uriAttr.Value)
+			return nil, errors.New("Missing URI attribute")
 		}
 
 		if uriAttr.Value[1:] == idAttr.Value {
-			signatureElement = sig
-			return etreeutils.ErrTraversalHalted
+			signatureElement = e
+			break
 		}
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
 	}
 
 	if signatureElement == nil {
-		return nil, ErrMissingSignature
+		return nil, errors.New("Missing signature referencing the top-level element")
 	}
-
-	return signatureElement, nil
-}
-
-func (ctx *ValidationContext) verifyCertificate(signatureElement *etree.Element) (*x509.Certificate, error) {
-	now := ctx.Clock.Now()
-
-	roots, err := ctx.CertificateStore.Certificates()
-	if err != nil {
-		return nil, err
-	}
-
-	var cert *x509.Certificate
 
 	// Get the x509 element from the signature
 	x509Element := signatureElement.FindElement("//" + childPath(signatureElement.Space, X509CertificateTag))
 	if x509Element == nil {
-		// Use root certificate if there is only one and it is not contained in signatureElement
-		if len(roots) == 1 {
-			cert = roots[0]
-		} else {
-			return nil, errors.New("Missing x509 Element")
-		}
-	} else {
-		certData, err := base64.StdEncoding.DecodeString(x509Element.Text())
-		if err != nil {
-			return nil, errors.New("Failed to parse certificate")
-		}
+		return nil, errors.New("Missing x509 Element")
+	}
 
-		cert, err = x509.ParseCertificate(certData)
-		if err != nil {
-			return nil, err
-		}
+	x509Text := "-----BEGIN CERTIFICATE-----\n" + x509Element.Text() + "\n-----END CERTIFICATE-----"
+	block, _ := pem.Decode([]byte(x509Text))
+	if block == nil {
+		return nil, errors.New("Failed to parse certificate PEM")
+	}
+
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	roots, err := ctx.CertificateStore.Certificates()
+	if err != nil {
+		return nil, err
 	}
 
 	// Verify that the certificate is one we trust
@@ -390,21 +386,12 @@ func (ctx *ValidationContext) verifyCertificate(signatureElement *etree.Element)
 	return cert, nil
 }
 
-// Validate verifies that the passed element contains a valid enveloped signature
-// matching a currently-valid certificate in the context's CertificateStore.
 func (ctx *ValidationContext) Validate(el *etree.Element) (*etree.Element, error) {
-	// Make a copy of the element to avoid mutating the one we were passed.
-	el = el.Copy()
+	cert, err := ctx.verifyCertificate(el)
 
-	sig, err := ctx.findSignature(el)
 	if err != nil {
 		return nil, err
 	}
 
-	cert, err := ctx.verifyCertificate(sig)
-	if err != nil {
-		return nil, err
-	}
-
-	return ctx.validateSignature(el, sig, cert)
+	return ctx.validateSignature(el, cert)
 }
