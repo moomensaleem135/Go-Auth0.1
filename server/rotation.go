@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -124,11 +125,8 @@ func (k keyRotater) rotate() error {
 	var nextRotation time.Time
 	err = k.Storage.UpdateKeys(func(keys storage.Keys) (storage.Keys, error) {
 		tNow := k.now()
-
-		// if you are running multiple instances of dex, another instance
-		// could have already rotated the keys.
 		if tNow.Before(keys.NextRotation) {
-			return storage.Keys{}, nil
+			return storage.Keys{}, errors.New("keys already rotated")
 		}
 
 		expired := func(key storage.VerificationKey) bool {
