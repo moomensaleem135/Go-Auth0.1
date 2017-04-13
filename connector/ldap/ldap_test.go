@@ -21,15 +21,6 @@ import (
 
 const envVar = "DEX_LDAP_TESTS"
 
-// connectionMethod indicates how the test should connect to the LDAP server.
-type connectionMethod int32
-
-const (
-	connectStartTLS connectionMethod = iota
-	connectLDAPS
-	connectLDAP
-)
-
 // subtest is a login test against a given schema.
 type subtest struct {
 	// Name of the sub-test.
@@ -119,7 +110,7 @@ userpassword: bar
 		},
 	}
 
-	runTests(t, schema, connectLDAP, c, tests)
+	runTests(t, schema, c, tests)
 }
 
 func TestGroupQuery(t *testing.T) {
@@ -207,7 +198,7 @@ member: cn=jane,ou=People,dc=example,dc=org
 		},
 	}
 
-	runTests(t, schema, connectLDAP, c, tests)
+	runTests(t, schema, c, tests)
 }
 
 func TestGroupsOnUserEntity(t *testing.T) {
@@ -304,93 +295,7 @@ gidNumber: 1002
 			},
 		},
 	}
-	runTests(t, schema, connectLDAP, c, tests)
-}
-
-func TestStartTLS(t *testing.T) {
-	schema := `
-dn: dc=example,dc=org
-objectClass: dcObject
-objectClass: organization
-o: Example Company
-dc: example
-
-dn: ou=People,dc=example,dc=org
-objectClass: organizationalUnit
-ou: People
-
-dn: cn=jane,ou=People,dc=example,dc=org
-objectClass: person
-objectClass: inetOrgPerson
-sn: doe
-cn: jane
-mail: janedoe@example.com
-userpassword: foo
-`
-	c := &Config{}
-	c.UserSearch.BaseDN = "ou=People,dc=example,dc=org"
-	c.UserSearch.NameAttr = "cn"
-	c.UserSearch.EmailAttr = "mail"
-	c.UserSearch.IDAttr = "DN"
-	c.UserSearch.Username = "cn"
-
-	tests := []subtest{
-		{
-			name:     "validpassword",
-			username: "jane",
-			password: "foo",
-			want: connector.Identity{
-				UserID:        "cn=jane,ou=People,dc=example,dc=org",
-				Username:      "jane",
-				Email:         "janedoe@example.com",
-				EmailVerified: true,
-			},
-		},
-	}
-	runTests(t, schema, connectStartTLS, c, tests)
-}
-
-func TestLDAPS(t *testing.T) {
-	schema := `
-dn: dc=example,dc=org
-objectClass: dcObject
-objectClass: organization
-o: Example Company
-dc: example
-
-dn: ou=People,dc=example,dc=org
-objectClass: organizationalUnit
-ou: People
-
-dn: cn=jane,ou=People,dc=example,dc=org
-objectClass: person
-objectClass: inetOrgPerson
-sn: doe
-cn: jane
-mail: janedoe@example.com
-userpassword: foo
-`
-	c := &Config{}
-	c.UserSearch.BaseDN = "ou=People,dc=example,dc=org"
-	c.UserSearch.NameAttr = "cn"
-	c.UserSearch.EmailAttr = "mail"
-	c.UserSearch.IDAttr = "DN"
-	c.UserSearch.Username = "cn"
-
-	tests := []subtest{
-		{
-			name:     "validpassword",
-			username: "jane",
-			password: "foo",
-			want: connector.Identity{
-				UserID:        "cn=jane,ou=People,dc=example,dc=org",
-				Username:      "jane",
-				Email:         "janedoe@example.com",
-				EmailVerified: true,
-			},
-		},
-	}
-	runTests(t, schema, connectLDAPS, c, tests)
+	runTests(t, schema, c, tests)
 }
 
 // runTests runs a set of tests against an LDAP schema. It does this by
@@ -400,7 +305,7 @@ userpassword: foo
 // machine's PATH.
 //
 // The DEX_LDAP_TESTS must be set to "1"
-func runTests(t *testing.T, schema string, connMethod connectionMethod, config *Config, tests []subtest) {
+func runTests(t *testing.T, schema string, config *Config, tests []subtest) {
 	if os.Getenv(envVar) != "1" {
 		t.Skipf("%s not set. Skipping test (run 'export %s=1' to run tests)", envVar, envVar)
 	}
@@ -411,11 +316,6 @@ func runTests(t *testing.T, schema string, connMethod connectionMethod, config *
 		}
 	}
 
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	tempDir, err := ioutil.TempDir("", "")
 	if err != nil {
 		t.Fatal(err)
@@ -424,13 +324,7 @@ func runTests(t *testing.T, schema string, connMethod connectionMethod, config *
 
 	configBytes := new(bytes.Buffer)
 
-	data := tmplData{
-		TempDir:  tempDir,
-		Includes: includes(t, wd),
-	}
-	data.TLSCertPath, data.TLSKeyPath = tlsAssets(t, wd)
-
-	if err := slapdConfigTmpl.Execute(configBytes, data); err != nil {
+	if err := slapdConfigTmpl.Execute(configBytes, tmplData{tempDir, includes(t)}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -450,7 +344,7 @@ func runTests(t *testing.T, schema string, connMethod connectionMethod, config *
 	cmd := exec.Command(
 		"slapd",
 		"-d", "any",
-		"-h", "ldap://localhost:10389/ ldaps://localhost:10636/ ldapi://"+socketPath,
+		"-h", "ldap://localhost:10363/ ldaps://localhost:10636/ ldapi://"+socketPath,
 		"-f", configPath,
 	)
 	cmd.Stdout = slapdOut
@@ -491,30 +385,18 @@ func runTests(t *testing.T, schema string, connMethod connectionMethod, config *
 		wg.Wait()
 	}()
 
-	// Try a few times to connect to the LDAP server. On slower machines
-	// it can take a while for it to come up.
-	connected := false
-	wait := 100 * time.Millisecond
-	for i := 0; i < 5; i++ {
-		time.Sleep(wait)
+	// Wait for slapd to come up.
+	time.Sleep(100 * time.Millisecond)
 
-		ldapadd := exec.Command(
-			"ldapadd", "-x",
-			"-D", "cn=admin,dc=example,dc=org",
-			"-w", "admin",
-			"-f", schemaPath,
-			"-H", "ldap://localhost:10389/",
-		)
-		if out, err := ldapadd.CombinedOutput(); err != nil {
-			t.Logf("ldapadd: %s", out)
-			wait = wait * 2 // backoff
-			continue
-		}
-		connected = true
-		break
-	}
-	if !connected {
-		t.Errorf("ldapadd command failed")
+	ldapadd := exec.Command(
+		"ldapadd", "-x",
+		"-D", "cn=admin,dc=example,dc=org",
+		"-w", "admin",
+		"-f", schemaPath,
+		"-H", "ldap://localhost:10363/",
+	)
+	if out, err := ldapadd.CombinedOutput(); err != nil {
+		t.Errorf("ldapadd: %s", out)
 		return
 	}
 
@@ -523,19 +405,8 @@ func runTests(t *testing.T, schema string, connMethod connectionMethod, config *
 
 	// We need to configure host parameters but don't want to overwrite user or
 	// group search configuration.
-	switch connMethod {
-	case connectStartTLS:
-		c.Host = "localhost:10389"
-		c.RootCA = "testdata/ca.crt"
-		c.StartTLS = true
-	case connectLDAPS:
-		c.Host = "localhost:10636"
-		c.RootCA = "testdata/ca.crt"
-	case connectLDAP:
-		c.Host = "localhost:10389"
-		c.InsecureNoSSL = true
-	}
-
+	c.Host = "localhost:10363"
+	c.InsecureNoSSL = true
 	c.BindDN = "cn=admin,dc=example,dc=org"
 	c.BindPW = "admin"
 
@@ -617,16 +488,10 @@ type tmplData struct {
 	TempDir string
 	// List of schema files to include.
 	Includes []string
-	// TLS assets for LDAPS.
-	TLSKeyPath  string
-	TLSCertPath string
 }
 
 // Config template copied from:
 // http://www.zytrax.com/books/ldap/ch5/index.html#step1-slapd
-//
-// TLS instructions found here:
-// http://www.openldap.org/doc/admin24/tls.html
 var slapdConfigTmpl = template.Must(template.New("").Parse(`
 {{ range $i, $include := .Includes }}
 include {{ $include }}
@@ -645,9 +510,6 @@ rootpw admin
 # The database directory MUST exist prior to running slapd AND 
 # change path as necessary
 directory	{{ .TempDir }}
-
-TLSCertificateFile {{ .TLSCertPath }}
-TLSCertificateKeyFile {{ .TLSKeyPath }}
 
 # Indices to maintain for this directory
 # unique id so equality match only
@@ -672,18 +534,11 @@ cachesize 10000
 checkpoint 128 15
 `))
 
-func tlsAssets(t *testing.T, wd string) (certPath, keyPath string) {
-	certPath = filepath.Join(wd, "testdata", "server.crt")
-	keyPath = filepath.Join(wd, "testdata", "server.key")
-	for _, p := range []string{certPath, keyPath} {
-		if _, err := os.Stat(p); err != nil {
-			t.Fatalf("failed to find TLS asset file: %s %v", p, err)
-		}
+func includes(t *testing.T) (paths []string) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getting working directory: %v", err)
 	}
-	return
-}
-
-func includes(t *testing.T, wd string) (paths []string) {
 	for _, f := range includeFiles {
 		p := filepath.Join(wd, "testdata", f)
 		if _, err := os.Stat(p); err != nil {
