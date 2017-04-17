@@ -60,12 +60,11 @@ To run dex on Kubernetes perform the following steps:
 2. Spin up a Kubernetes cluster with the appropriate flags and CA volume mount.
 3. Create a secret containing your [GitHub OAuth2 client credentials][github-oauth2].
 4. Deploy dex.
-5. Create and assign 'dex' cluster role to dex service account (if RBAC authorization is used).
 
 The TLS assets can be created using the following command:
 
 ```
-$ cd examples/k8s
+$ cd examles/k8s
 $ ./gencert.sh
 ```
 
@@ -84,19 +83,17 @@ $ kubectl create secret \
     --from-literal=client-secret=$GITHUB_CLIENT_SECRET
 ```
 
-Create the dex deployment, configmap, and node port service.
+Finally, create the dex deployment, configmap, and node port service.
 
 ```
 $ kubectl create -f dex.yaml
 ```
 
-Assign cluster role to dex service account so it can create third party resources [Kubernetes third party resources](storage.md).
-
 __Caveats:__ No health checking is configured because dex does its own TLS termination complicating the setup. This is a known issue and can be tracked [here][dex-healthz].
 
 ## Logging into the cluster
 
-The `example-app` can be used to log into the cluster and get an ID Token. To build the app, you can run `make` in the root of the repo and it will build the `example-app` binary in the repo's `bin` directory. To build the `example-app` requires at least a 1.7 version of Go.
+The `example-app` can be used to log into the cluster and get an ID Token. To build the app, you can run `make` in the root of the repo and it will build the `example-app` binary in the repo's `bin` directory. To build the `example-app` requires at least a 1.7 version of Go. 
 
 ```
 $ ./bin/example-app --issuer https://dex.example.com:32000 --issuer-root-ca examples/k8s/ssl/ca.pem
@@ -122,6 +119,6 @@ $ curl -H "Authorization: Bearer $token" -k https://( API server host ):443/api/
 [coreos-baremetal]: https://github.com/coreos/coreos-baremetal/
 [dex-healthz]: https://github.com/coreos/dex/issues/682
 [github-oauth2]: https://github.com/settings/applications/new
-[node-port]: http://kubernetes.io/docs/user-guide/services/#type-nodeport
+[node-port]: http://kubernetes.io/docs/user-guide/services/#type-nodeport 
 [coreos-kubernetes]: https://github.com/coreos/coreos-kubernetes
 [coreos-baremetal]: https://github.com/coreos/coreos-baremetal
