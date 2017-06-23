@@ -19,7 +19,7 @@ Apps that directly use dex to authenticate a user use OAuth2 code flows to reque
 * User visits client app.
 * Client app redirects user to dex with an OAuth2 request.
 * Dex determines user's identity.
-* Dex redirects user to dex with a code.
+* Dex redirects user to client with a code.
 * Client exchanges code with dex for an id_token.
 
 ![][dex-flow]
@@ -136,7 +136,7 @@ A more thorough discussion of these kinds of best practices can be found in the 
 
 ## Consuming ID tokens
 
-Apps can also choose to consume ID tokens, letting other trusted clients handle the web flows for login. Clients pass along the ID tokens they receive from dex, usually as a bearer token, letting them act at the user to the backend service.
+Apps can also choose to consume ID tokens, letting other trusted clients handle the web flows for login. Clients pass along the ID tokens they receive from dex, usually as a bearer token, letting them act as the user to the backend service.
 
 ![][dex-backend-flow]
 
