@@ -134,15 +134,14 @@ type githubConnector struct {
 }
 
 func (c *githubConnector) oauth2Config(scopes connector.Scopes) *oauth2.Config {
-	var githubScopes []string
-	if scopes.Groups {
-		githubScopes = []string{scopeEmail, scopeOrgs}
-	} else {
-		githubScopes = []string{scopeEmail}
+	// The GitHub API requires requires read:org scope to ensure users are members
+	// of orgs and teams provided in configs.
+	githubScopes := []string{scopeEmail}
+	if len(c.orgs) > 0 || c.org != "" {
+		githubScopes = append(githubScopes, scopeOrgs)
 	}
 
 	endpoint := github.Endpoint
-
 	// case when it is a GitHub Enterprise account.
 	if c.hostName != "" {
 		endpoint = oauth2.Endpoint{
@@ -207,6 +206,22 @@ func newHTTPClient(rootCA string) (*http.Client, error) {
 	}, nil
 }
 
+// getGroups retrieves GitHub orgs and teams a user is in, if any.
+func (c *githubConnector) getGroups(ctx context.Context, client *http.Client, groupScope bool, userLogin string) (groups []string, err error) {
+	// Org and team membership should always be checked if specified by config.
+	if len(c.orgs) > 0 {
+		if groups, err = c.listGroups(ctx, client, userLogin); err != nil {
+			return groups, err
+		}
+	} else if groupScope && c.org != "" {
+		// Do not check org membership here to preserve legacy behavior.
+		if groups, err = c.teams(ctx, client, c.org); err != nil {
+			return groups, fmt.Errorf("github: get teams: %v", err)
+		}
+	}
+	return groups, nil
+}
+
 func (c *githubConnector) HandleCallback(s connector.Scopes, r *http.Request) (identity connector.Identity, err error) {
 	q := r.URL.Query()
 	if errType := q.Get("error"); errType != "" {
@@ -244,24 +259,13 @@ func (c *githubConnector) HandleCallback(s connector.Scopes, r *http.Request) (i
 		EmailVerified: true,
 	}
 
-	if s.Groups {
-		var groups []string
-		if len(c.orgs) > 0 {
-			if groups, err = c.listGroups(ctx, client, username); err != nil {
-				return identity, err
-			}
-		} else if c.org != "" {
-			inOrg, err := c.userInOrg(ctx, client, username, c.org)
-			if err != nil {
-				return identity, err
-			}
-			if !inOrg {
-				return identity, fmt.Errorf("github: user %q not a member of org %q", username, c.org)
-			}
-			if groups, err = c.teams(ctx, client, c.org); err != nil {
-				return identity, fmt.Errorf("github: get teams: %v", err)
-			}
-		}
+	groups, err := c.getGroups(ctx, client, s.Groups, user.Login)
+	if err != nil {
+		return identity, err
+	}
+	// Preserve behavior of only setting identity.Groups if 'orgs' or groups scope
+	// and 'org' are specified.
+	if len(c.orgs) > 0 || (s.Groups && c.org != "") {
 		identity.Groups = groups
 	}
 
@@ -300,24 +304,13 @@ func (c *githubConnector) Refresh(ctx context.Context, s connector.Scopes, ident
 	identity.Username = username
 	identity.Email = user.Email
 
-	if s.Groups {
-		var groups []string
-		if len(c.orgs) > 0 {
-			if groups, err = c.listGroups(ctx, client, username); err != nil {
-				return identity, err
-			}
-		} else if c.org != "" {
-			inOrg, err := c.userInOrg(ctx, client, username, c.org)
-			if err != nil {
-				return identity, err
-			}
-			if !inOrg {
-				return identity, fmt.Errorf("github: user %q not a member of org %q", username, c.org)
-			}
-			if groups, err = c.teams(ctx, client, c.org); err != nil {
-				return identity, fmt.Errorf("github: get teams: %v", err)
-			}
-		}
+	groups, err := c.getGroups(ctx, client, s.Groups, user.Login)
+	if err != nil {
+		return identity, err
+	}
+	// Preserve behavior of only setting identity.Groups if 'orgs' or groups scope
+	// and 'org' are specified.
+	if len(c.orgs) > 0 || (s.Groups && c.org != "") {
 		identity.Groups = groups
 	}
 
@@ -350,9 +343,8 @@ func (c *githubConnector) listGroups(ctx context.Context, client *http.Client, u
 		// 'teams' list in config.
 		if len(org.Teams) == 0 {
 			inOrgNoTeams = true
-			c.logger.Debugf("github: user %q in org %q", userName, org.Name)
 		} else if teams = filterTeams(teams, org.Teams); len(teams) == 0 {
-			c.logger.Debugf("github: user %q in org %q but no teams", userName, org.Name)
+			c.logger.Infof("github: user %q in org %q but no teams", userName, org.Name)
 		}
 
 		// Orgs might have the same team names. We append orgPrefix to team name,
@@ -360,7 +352,6 @@ func (c *githubConnector) listGroups(ctx context.Context, client *http.Client, u
 		orgPrefix := org.Name + ":"
 		for _, teamName := range teams {
 			groups = append(groups, orgPrefix+teamName)
-			c.logger.Debugf("github: user %q in org %q team %q", userName, org.Name, teamName)
 		}
 	}
 	if inOrgNoTeams || len(groups) > 0 {
@@ -503,11 +494,6 @@ func (c *githubConnector) userEmail(ctx context.Context, client *http.Client) (s
 		}
 
 		for _, email := range emails {
-			// if GitHub Enterprise, set email.Verified to true
-			if c.hostName != "" {
-				email.Verified = true
-			}
-			
 			if email.Verified && email.Primary {
 				return email.Email, nil
 			}
@@ -547,7 +533,7 @@ func (c *githubConnector) userInOrg(ctx context.Context, client *http.Client, us
 	switch resp.StatusCode {
 	case http.StatusNoContent:
 	case http.StatusFound, http.StatusNotFound:
-		c.logger.Debugf("github: user %q not in org %q", userName, orgName)
+		c.logger.Infof("github: user %q not in org %q or application not authorized to read org data", userName, orgName)
 	default:
 		err = fmt.Errorf("github: unexpected return status: %q", resp.Status)
 	}
