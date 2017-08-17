@@ -128,12 +128,12 @@ func (s *memStorage) CreateAuthRequest(a storage.AuthRequest) (err error) {
 }
 
 func (s *memStorage) CreatePassword(p storage.Password) (err error) {
-	lowerEmail := strings.ToLower(p.Email)
+	p.Email = strings.ToLower(p.Email)
 	s.tx(func() {
-		if _, ok := s.passwords[lowerEmail]; ok {
+		if _, ok := s.passwords[p.Email]; ok {
 			err = storage.ErrAlreadyExists
 		} else {
-			s.passwords[lowerEmail] = p
+			s.passwords[p.Email] = p
 		}
 	})
 	return

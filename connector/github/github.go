@@ -24,12 +24,9 @@ import (
 )
 
 const (
-	apiURL = "https://api.github.com"
-	// GitHub requires this scope to access '/user' and '/user/emails' API endpoints.
+	apiURL     = "https://api.github.com"
 	scopeEmail = "user:email"
-	// GitHub requires this scope to access '/user/teams' and '/orgs' API endpoints
-	// which are used when a client includes the 'groups' scope.
-	scopeOrgs = "read:org"
+	scopeOrgs  = "read:org"
 )
 
 // Pagination URL patterns
@@ -136,22 +133,16 @@ type githubConnector struct {
 	httpClient *http.Client
 }
 
-// groupsRequired returns whether dex requires GitHub's 'read:org' scope. Dex
-// needs 'read:org' if 'orgs' or 'org' fields are populated in a config file.
-// Clients can require 'groups' scope without setting 'orgs'/'org'.
-func (c *githubConnector) groupsRequired(groupScope bool) bool {
-	return len(c.orgs) > 0 || c.org != "" || groupScope
-}
-
 func (c *githubConnector) oauth2Config(scopes connector.Scopes) *oauth2.Config {
-	// 'read:org' scope is required by the GitHub API, and thus for dex to ensure
-	// a user is a member of orgs and teams provided in configs.
-	githubScopes := []string{scopeEmail}
-	if c.groupsRequired(scopes.Groups) {
-		githubScopes = append(githubScopes, scopeOrgs)
+	var githubScopes []string
+	if scopes.Groups {
+		githubScopes = []string{scopeEmail, scopeOrgs}
+	} else {
+		githubScopes = []string{scopeEmail}
 	}
 
 	endpoint := github.Endpoint
+
 	// case when it is a GitHub Enterprise account.
 	if c.hostName != "" {
 		endpoint = oauth2.Endpoint{
@@ -253,11 +244,23 @@ func (c *githubConnector) HandleCallback(s connector.Scopes, r *http.Request) (i
 		EmailVerified: true,
 	}
 
-	// Only set identity.Groups if 'orgs', 'org', or 'groups' scope are specified.
-	if c.groupsRequired(s.Groups) {
-		groups, err := c.getGroups(ctx, client, s.Groups, user.Login)
-		if err != nil {
-			return identity, err
+	if s.Groups {
+		var groups []string
+		if len(c.orgs) > 0 {
+			if groups, err = c.listGroups(ctx, client, username); err != nil {
+				return identity, err
+			}
+		} else if c.org != "" {
+			inOrg, err := c.userInOrg(ctx, client, username, c.org)
+			if err != nil {
+				return identity, err
+			}
+			if !inOrg {
+				return identity, fmt.Errorf("github: user %q not a member of org %q", username, c.org)
+			}
+			if groups, err = c.teams(ctx, client, c.org); err != nil {
+				return identity, fmt.Errorf("github: get teams: %v", err)
+			}
 		}
 		identity.Groups = groups
 	}
@@ -297,11 +300,23 @@ func (c *githubConnector) Refresh(ctx context.Context, s connector.Scopes, ident
 	identity.Username = username
 	identity.Email = user.Email
 
-	// Only set identity.Groups if 'orgs', 'org', or 'groups' scope are specified.
-	if c.groupsRequired(s.Groups) {
-		groups, err := c.getGroups(ctx, client, s.Groups, user.Login)
-		if err != nil {
-			return identity, err
+	if s.Groups {
+		var groups []string
+		if len(c.orgs) > 0 {
+			if groups, err = c.listGroups(ctx, client, username); err != nil {
+				return identity, err
+			}
+		} else if c.org != "" {
+			inOrg, err := c.userInOrg(ctx, client, username, c.org)
+			if err != nil {
+				return identity, err
+			}
+			if !inOrg {
+				return identity, fmt.Errorf("github: user %q not a member of org %q", username, c.org)
+			}
+			if groups, err = c.teams(ctx, client, c.org); err != nil {
+				return identity, fmt.Errorf("github: get teams: %v", err)
+			}
 		}
 		identity.Groups = groups
 	}
@@ -309,23 +324,13 @@ func (c *githubConnector) Refresh(ctx context.Context, s connector.Scopes, ident
 	return identity, nil
 }
 
-// getGroups retrieves GitHub orgs and teams a user is in, if any.
-func (c *githubConnector) getGroups(ctx context.Context, client *http.Client, groupScope bool, userLogin string) ([]string, error) {
-	if len(c.orgs) > 0 {
-		return c.groupsForOrgs(ctx, client, userLogin)
-	} else if c.org != "" {
-		return c.teamsForOrg(ctx, client, c.org)
-	}
-	return nil, nil
-}
-
-// groupsForOrgs enforces org and team constraints on user authorization
+// listGroups enforces org and team constraints on user authorization
 // Cases in which user is authorized:
 // 	N orgs, no teams: user is member of at least 1 org
 // 	N orgs, M teams per org: user is member of any team from at least 1 org
 // 	N-1 orgs, M teams per org, 1 org with no teams: user is member of any team
 // from at least 1 org, or member of org with no teams
-func (c *githubConnector) groupsForOrgs(ctx context.Context, client *http.Client, userName string) (groups []string, err error) {
+func (c *githubConnector) listGroups(ctx context.Context, client *http.Client, userName string) (groups []string, err error) {
 	var inOrgNoTeams bool
 	for _, org := range c.orgs {
 		inOrg, err := c.userInOrg(ctx, client, userName, org.Name)
@@ -336,7 +341,7 @@ func (c *githubConnector) groupsForOrgs(ctx context.Context, client *http.Client
 			continue
 		}
 
-		teams, err := c.teamsForOrg(ctx, client, org.Name)
+		teams, err := c.teams(ctx, client, org.Name)
 		if err != nil {
 			return groups, err
 		}
@@ -345,8 +350,9 @@ func (c *githubConnector) groupsForOrgs(ctx context.Context, client *http.Client
 		// 'teams' list in config.
 		if len(org.Teams) == 0 {
 			inOrgNoTeams = true
+			c.logger.Debugf("github: user %q in org %q", userName, org.Name)
 		} else if teams = filterTeams(teams, org.Teams); len(teams) == 0 {
-			c.logger.Infof("github: user %q in org %q but no teams", userName, org.Name)
+			c.logger.Debugf("github: user %q in org %q but no teams", userName, org.Name)
 		}
 
 		// Orgs might have the same team names. We append orgPrefix to team name,
@@ -354,6 +360,7 @@ func (c *githubConnector) groupsForOrgs(ctx context.Context, client *http.Client
 		orgPrefix := org.Name + ":"
 		for _, teamName := range teams {
 			groups = append(groups, orgPrefix+teamName)
+			c.logger.Debugf("github: user %q in org %q team %q", userName, org.Name, teamName)
 		}
 	}
 	if inOrgNoTeams || len(groups) > 0 {
@@ -496,20 +503,6 @@ func (c *githubConnector) userEmail(ctx context.Context, client *http.Client) (s
 		}
 
 		for _, email := range emails {
-			/*
-				if GitHub Enterprise, set email.Verified to true
-				This change being made because GitHub Enterprise does not
-				support email verification. CircleCI indicated that GitHub
-				advised them not to check for verified emails
-				(https://circleci.com/enterprise/changelog/#1-47-1).
-				In addition, GitHub Enterprise support replied to a support
-				ticket with "There is no way to verify an email address in 
-				GitHub Enterprise."			
-			*/
-			if c.hostName != "" {
-				email.Verified = true
-			}
-			
 			if email.Verified && email.Primary {
 				return email.Email, nil
 			}
@@ -549,7 +542,7 @@ func (c *githubConnector) userInOrg(ctx context.Context, client *http.Client, us
 	switch resp.StatusCode {
 	case http.StatusNoContent:
 	case http.StatusFound, http.StatusNotFound:
-		c.logger.Infof("github: user %q not in org %q or application not authorized to read org data", userName, orgName)
+		c.logger.Debugf("github: user %q not in org %q", userName, orgName)
 	default:
 		err = fmt.Errorf("github: unexpected return status: %q", resp.Status)
 	}
@@ -567,11 +560,11 @@ type team struct {
 	} `json:"organization"`
 }
 
-// teamsForOrg queries the GitHub API for team membership within a specific organization.
+// teams queries the GitHub API for team membership within a specific organization.
 //
 // The HTTP passed client is expected to be constructed by the golang.org/x/oauth2 package,
 // which inserts a bearer token as part of the request.
-func (c *githubConnector) teamsForOrg(ctx context.Context, client *http.Client, orgName string) ([]string, error) {
+func (c *githubConnector) teams(ctx context.Context, client *http.Client, orgName string) ([]string, error) {
 	apiURL, groups := c.apiURL+"/user/teams", []string{}
 	for {
 		// https://developer.github.com/v3/orgs/teams/#list-user-teams
@@ -580,7 +573,7 @@ func (c *githubConnector) teamsForOrg(ctx context.Context, client *http.Client, 
 			err   error
 		)
 		if apiURL, err = get(ctx, client, apiURL, &teams); err != nil {
-			return nil, fmt.Errorf("github: get teams: %v", err)
+			return nil, err
 		}
 
 		for _, team := range teams {

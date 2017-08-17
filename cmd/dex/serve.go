@@ -144,7 +144,7 @@ func serve(cmd *cobra.Command, args []string) error {
 		for i, p := range c.StaticPasswords {
 			passwords[i] = storage.Password(p)
 		}
-		s = storage.WithStaticPasswords(s, passwords, logger)
+		s = storage.WithStaticPasswords(s, passwords)
 	}
 
 	storageConnectors := make([]storage.Connector, len(c.StaticConnectors))
