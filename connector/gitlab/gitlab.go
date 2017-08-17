@@ -17,9 +17,8 @@ import (
 )
 
 const (
-	// https://docs.gitlab.com/ee/integration/oauth_provider.html#authorized-applications
-	scopeUser = "read_user"
-	scopeAPI  = "api"
+	scopeEmail = "user:email"
+	scopeOrgs  = "read:org"
 )
 
 // Config holds configuration options for gilab logins.
@@ -79,11 +78,7 @@ type gitlabConnector struct {
 }
 
 func (c *gitlabConnector) oauth2Config(scopes connector.Scopes) *oauth2.Config {
-	gitlabScopes := []string{scopeUser}
-	if scopes.Groups {
-		gitlabScopes = []string{scopeAPI}
-	}
-
+	gitlabScopes := []string{"api"}
 	gitlabEndpoint := oauth2.Endpoint{AuthURL: c.baseURL + "/oauth/authorize", TokenURL: c.baseURL + "/oauth/token"}
 	return &oauth2.Config{
 		ClientID:     c.clientID,
@@ -203,7 +198,7 @@ func (c *gitlabConnector) Refresh(ctx context.Context, s connector.Scopes, ident
 // a bearer token as part of the request.
 func (c *gitlabConnector) user(ctx context.Context, client *http.Client) (gitlabUser, error) {
 	var u gitlabUser
-	req, err := http.NewRequest("GET", c.baseURL+"/api/v4/user", nil)
+	req, err := http.NewRequest("GET", c.baseURL+"/api/v3/user", nil)
 	if err != nil {
 		return u, fmt.Errorf("gitlab: new req: %v", err)
 	}
@@ -234,7 +229,7 @@ func (c *gitlabConnector) user(ctx context.Context, client *http.Client) (gitlab
 // which inserts a bearer token as part of the request.
 func (c *gitlabConnector) groups(ctx context.Context, client *http.Client) ([]string, error) {
 
-	apiURL := c.baseURL + "/api/v4/groups"
+	apiURL := c.baseURL + "/api/v3/groups"
 
 	reNext := regexp.MustCompile("<(.*)>; rel=\"next\"")
 	reLast := regexp.MustCompile("<(.*)>; rel=\"last\"")
