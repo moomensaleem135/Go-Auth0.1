@@ -1,13 +1,12 @@
 package oidc
 
 import (
+	"github.com/coreos/dex/connector"
+	"github.com/sirupsen/logrus"
 	"net/url"
 	"os"
 	"reflect"
 	"testing"
-
-	"github.com/coreos/dex/connector"
-	"github.com/sirupsen/logrus"
 )
 
 func TestKnownBrokenAuthHeaderProvider(t *testing.T) {
@@ -74,7 +73,7 @@ func TestOidcConnector_LoginURL(t *testing.T) {
 			HostedDomains: test.hostedDomains,
 		}
 
-		conn, err := config.Open("oidc", logger)
+		conn, err := config.Open(logger)
 		if err != nil {
 			t.Errorf("failed to open connector: %v", err)
 			continue
