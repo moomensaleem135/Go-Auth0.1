@@ -38,7 +38,6 @@ const (
 type Config struct {
 	InCluster      bool   `json:"inCluster"`
 	KubeConfigFile string `json:"kubeConfigFile"`
-	UseTPR         bool   `json:"useTPR"` // Flag option to use TPRs instead of CRDs
 }
 
 // Open returns a storage using Kubernetes third party resource.
@@ -53,9 +52,9 @@ func (c *Config) Open(logger logrus.FieldLogger) (storage.Storage, error) {
 // open returns a kubernetes client, initializing the third party resources used
 // by dex.
 //
-// errOnResources controls if errors creating the resources cause this method to return
+// errOnTPRs controls if errors creating the resources cause this method to return
 // immediately (used during testing), or if the client will asynchronously retry.
-func (c *Config) open(logger logrus.FieldLogger, errOnResources bool) (*client, error) {
+func (c *Config) open(logger logrus.FieldLogger, errOnTPRs bool) (*client, error) {
 	if c.InCluster && (c.KubeConfigFile != "") {
 		return nil, errors.New("cannot specify both 'inCluster' and 'kubeConfigFile'")
 	}
@@ -78,27 +77,26 @@ func (c *Config) open(logger logrus.FieldLogger, errOnResources bool) (*client, 
 		return nil, err
 	}
 
-	cli, err := newClient(cluster, user, namespace, logger, c.UseTPR)
+	cli, err := newClient(cluster, user, namespace, logger)
 	if err != nil {
 		return nil, fmt.Errorf("create client: %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	logger.Info("creating custom Kubernetes resources")
-	if !cli.registerCustomResources(c.UseTPR) {
-		if errOnResources {
+	if !cli.createThirdPartyResources() {
+		if errOnTPRs {
 			cancel()
-			return nil, fmt.Errorf("failed creating custom resources")
+			return nil, fmt.Errorf("failed creating third party resources")
 		}
 
-		// Try to synchronously create the custom resources once. This doesn't mean
+		// Try to synchronously create the third party resources once. This doesn't mean
 		// they'll immediately be available, but ensures that the client will actually try
 		// once.
-		logger.Errorf("failed creating custom resources: %v", err)
+		logger.Errorf("failed creating third party resources: %v", err)
 		go func() {
 			for {
-				if cli.registerCustomResources(c.UseTPR) {
+				if cli.createThirdPartyResources() {
 					return
 				}
 
@@ -111,56 +109,37 @@ func (c *Config) open(logger logrus.FieldLogger, errOnResources bool) (*client, 
 		}()
 	}
 
-	// If the client is closed, stop trying to create resources.
+	// If the client is closed, stop trying to create third party resources.
 	cli.cancel = cancel
 	return cli, nil
 }
 
-// registerCustomResources attempts to create the custom resources dex
-// requires or identifies that they're already enabled. This function creates
-// third party resources(TPRs) or custom resource definitions(CRDs) depending
-// on the `useTPR` flag passed in as an argument.
-// It logs all errors, returning true if the resources were created successfully.
+// createThirdPartyResources attempts to create the third party resources dex
+// requires or identifies that they're already enabled. It logs all errors,
+// returning true if the third party resources were created successfully.
 //
-// Creating a custom resource does not mean that they'll be immediately available.
+// Creating a third party resource does not mean that they'll be immediately available.
 //
-// TODO(ericchiang): Provide an option to wait for the resources to actually
-// be available.
-func (cli *client) registerCustomResources(useTPR bool) (ok bool) {
+// TODO(ericchiang): Provide an option to wait for the third party resources
+// to actually be available.
+func (cli *client) createThirdPartyResources() (ok bool) {
 	ok = true
-	length := len(customResourceDefinitions)
-	if useTPR {
-		length = len(thirdPartyResources)
-	}
-
-	for i := 0; i < length; i++ {
-		var err error
-		var resourceName string
-
-		if useTPR {
-			r := thirdPartyResources[i]
-			err = cli.postResource("extensions/v1beta1", "", "thirdpartyresources", r)
-			resourceName = r.ObjectMeta.Name
-		} else {
-			r := customResourceDefinitions[i]
-			err = cli.postResource("apiextensions.k8s.io/v1beta1", "", "customresourcedefinitions", r)
-			resourceName = r.ObjectMeta.Name
-		}
-
+	for _, r := range thirdPartyResources {
+		err := cli.postResource("extensions/v1beta1", "", "thirdpartyresources", r)
 		if err != nil {
 			switch err {
 			case storage.ErrAlreadyExists:
-				cli.logger.Infof("custom resource already created %s", resourceName)
+				cli.logger.Infof("third party resource already created %s", r.ObjectMeta.Name)
 			case storage.ErrNotFound:
-				cli.logger.Errorf("custom resources not found, please enable the respective API group")
+				cli.logger.Errorf("third party resources not found, please enable API group extensions/v1beta1")
 				ok = false
 			default:
-				cli.logger.Errorf("creating custom resource %s: %v", resourceName, err)
+				cli.logger.Errorf("creating third party resource %s: %v", r.ObjectMeta.Name, err)
 				ok = false
 			}
 			continue
 		}
-		cli.logger.Errorf("create custom resource %s", resourceName)
+		cli.logger.Errorf("create third party resource %s", r.ObjectMeta.Name)
 	}
 	return ok
 }
