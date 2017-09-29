@@ -4,13 +4,98 @@ Dex requires persisting state to perform various tasks such as track refresh tok
 
 Storage breaches are serious as they can affect applications that rely on dex. Dex saves sensitive data in its backing storage, including signing keys and bcrypt'd passwords. As such, transport security and database ACLs should both be used, no matter which storage option is chosen.
 
-## Kubernetes third party resources
+## Kubernetes custom resource definitions (CRDs)
 
-__NOTE:__ Dex requires Kubernetes version 1.4+.
+__NOTE:__ CRDs are only supported by Kubernetes version 1.7+.
 
-Kubernetes third party resources are a way for applications to create new resources types in the Kubernetes API. This allows dex to run on top of an existing Kubernetes cluster without the need for an external database. While this storage may not be appropriate for a large number of users, it's extremely effective for many Kubernetes use cases.
+Kubernetes [custom resource definitions](crd) are a way for applications to create new resources types in the Kubernetes API. The Custom Resource Definition (CRD) API object was introduced in Kubernetes version 1.7 to replace the Third Party Resource (TPR) extension. CRDs allows dex to run on top of an existing Kubernetes cluster without the need for an external database. While this storage may not be appropriate for a large number of users, it's extremely effective for many Kubernetes use cases.
 
-The rest of this section will explore internal details of how dex uses `ThirdPartyResources`. __Admins should not interact with these resources directly__, except when debugging. These resources are only designed to store state and aren't meant to be consumed by humans. For modifying dex's state dynamically see the [API documentation](api.md).
+The rest of this section will explore internal details of how dex uses CRDs. __Admins should not interact with these resources directly__, except while debugging. These resources are only designed to store state and aren't meant to be consumed by end users. For modifying dex's state dynamically see the [API documentation](api.md).
+
+The following is an example of the AuthCode resource managed by dex:
+
+```
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  creationTimestamp: 2017-09-13T19:56:28Z
+  name: authcodes.dex.coreos.com
+  resourceVersion: "288893"
+  selfLink: /apis/apiextensions.k8s.io/v1beta1/customresourcedefinitions/authcodes.dex.coreos.com
+  uid: a1cb72dc-98bd-11e7-8f6a-02d13336a01e
+spec:
+  group: dex.coreos.com
+  names:
+    kind: AuthCode
+    listKind: AuthCodeList
+    plural: authcodes
+    singular: authcode
+  scope: Namespaced
+  version: v1
+status:
+  acceptedNames:
+    kind: AuthCode
+    listKind: AuthCodeList
+    plural: authcodes
+    singular: authcode
+  conditions:
+  - lastTransitionTime: null
+    message: no conflicts found
+    reason: NoConflicts
+    status: "True"
+    type: NamesAccepted
+  - lastTransitionTime: 2017-09-13T19:56:28Z
+    message: the initial names have been accepted
+    reason: InitialNamesAccepted
+    status: "True"
+    type: Established
+```
+
+Once the `CustomResourceDefinition` is created, custom resources can be created and stored at a namespace level. The CRD type and the custom resources can be queried, deleted, and edited like any other resource using `kubectl`.
+
+dex requires access to the non-namespaced `CustomResourceDefinition` type. For example, clusters using RBAC authorization would need to create the following roles and bindings:
+```
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: dex
+rules:
+- apiGroups: ["dex.coreos.com"] # API group created by dex
+  resources: ["*"]
+  verbs: ["*"]
+- apiGroups: ["apiextensions.k8s.io"]
+  resources: ["customresourcedefinitions"]
+  verbs: ["create"] # To manage its own resources identity must be able to create customresourcedefinitions.
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: dex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: dex
+subjects:
+- kind: ServiceAccount
+  name: dex                 # Service account assigned to the dex pod.
+  namespace: dex-namespace  # The namespace dex is running in.
+
+```
+
+
+## Kubernetes third party resources(TPRs)
+
+__NOTE:__ TPRs will be deprecated by Kubernetes version 1.8.
+
+The default behavior of dex from release v2.7.0 onwards is to utitlize CRDs to manage its custom resources. If users would like to use dex with a Kubernetes version lower than 1.7, they will have to force dex to use TPRs instead of CRDs by setting the `UseTPR` flag in the storage configuration as shown below:
+
+```
+storage:
+  type: kubernetes
+  config:
+    kubeConfigFile: kubeconfig
+    useTPR: true
+```
 
 The `ThirdPartyResource` type acts as a description for the new resource a user wishes to create. The following an example of a resource managed by dex:
 
@@ -92,6 +177,39 @@ storage:
 
 Dex determines the namespace it's running in by parsing the service account token automatically mounted into its pod.
 
+## Migrating from TPRs to CRDs
+
+This section descibes how users can migrate storage data in dex when upgrading from an older version of kubernetes (lower than 1.7). This involves creating new CRDs and moving over the data from TPRs.
+The flow of the migration process is as follows:
+1. Stop running old version of Dex (lower than v2.7.0).
+2. Create new CRDs by running the following command:
+   ```
+   kubectl apply -f scripts/manifests/crds/
+   ```
+   Note that the newly created CRDs have `dex.coreos.com` as their group and will not conflict with the existing TPR resources which have `oidc.coreos.com` as the group.
+3. Migrate data from existing TPRs to CRDs by running the following commands for each of the TPRs:
+   1. Export `DEX_NAMESPACE` to be the namespace in which the TPRs exist and run the following script to store TPR definition in a temporary yaml file:
+      ```
+      export DEX_NAMESPACE="<namespace-value>"
+      ./scripts/dump-tprs > out.yaml
+      ```
+   2. Update `out.yaml` to change the apiVersion to `apiVersion: dex.coreos.com/v1` and delete the `resourceVersion` field.
+      ```
+      sed 's/oidc.coreos.com/dex.coreos.com/' out.yaml
+      ```
+      ```
+      sed 's/resourceVersion: ".*"//' out.yaml
+      ```
+   3. Create the resource object using the following command:
+      ```
+      kubectl apply -f out.yaml
+      ```
+   4. Confirm that the resource got created using the following get command:
+      ```
+      kubectl get --namespace=tectonic-system <TPR-name>.dex.coreos.com  -o yaml
+      ```
+4. Update to new version of Dex (v2.7.0 or higher) which will use CRDs instead of TPRs.
+
 ## SQL
 
 Dex supports two flavors of SQL, SQLite3 and Postgres. MySQL and CockroachDB may be added at a later time.
@@ -166,3 +284,4 @@ Any proposal to add a new implementation must address the following:
 [issues-transaction-tests]: https://github.com/coreos/dex/issues/600
 [k8s-api]: https://github.com/kubernetes/kubernetes/blob/master/docs/devel/api-conventions.md#concurrency-control-and-consistency
 [psql-conn-options]: https://godoc.org/github.com/lib/pq#hdr-Connection_String_Parameters
+[crd]: https://kubernetes.io/docs/tasks/access-kubernetes-api/extend-api-custom-resource-definitions/
