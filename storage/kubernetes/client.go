@@ -333,10 +333,7 @@ func newClient(cluster k8sapi.Cluster, user k8sapi.AuthInfo, namespace string, l
 
 	logger.Infof("kubernetes client apiVersion = %s", apiVersion)
 	return &client{
-		client: &http.Client{
-			Transport: t,
-			Timeout:   15 * time.Second,
-		},
+		client:     &http.Client{Transport: t},
 		baseURL:    cluster.Server,
 		hash:       func() hash.Hash { return fnv.New64() },
 		namespace:  namespace,

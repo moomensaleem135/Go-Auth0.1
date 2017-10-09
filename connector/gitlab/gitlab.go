@@ -22,11 +22,6 @@ const (
 	scopeAPI  = "api"
 )
 
-var (
-	reNext = regexp.MustCompile("<([^>]+)>; rel=\"next\"")
-	reLast = regexp.MustCompile("<([^>]+)>; rel=\"last\"")
-)
-
 // Config holds configuration options for gilab logins.
 type Config struct {
 	BaseURL      string `json:"baseURL"`
@@ -241,6 +236,9 @@ func (c *gitlabConnector) groups(ctx context.Context, client *http.Client) ([]st
 
 	apiURL := c.baseURL + "/api/v4/groups"
 
+	reNext := regexp.MustCompile("<(.*)>; rel=\"next\"")
+	reLast := regexp.MustCompile("<(.*)>; rel=\"last\"")
+
 	groups := []string{}
 	var gitlabGroups []gitlabGroup
 	for {
@@ -274,28 +272,22 @@ func (c *gitlabConnector) groups(ctx context.Context, client *http.Client) ([]st
 
 		link := resp.Header.Get("Link")
 
-		apiURL = nextURL(apiURL, link)
-		if apiURL == "" {
+		if len(reLast.FindStringSubmatch(link)) > 1 {
+			lastPageURL := reLast.FindStringSubmatch(link)[1]
+
+			if apiURL == lastPageURL {
+				break
+			}
+		} else {
 			break
 		}
+
+		if len(reNext.FindStringSubmatch(link)) > 1 {
+			apiURL = reNext.FindStringSubmatch(link)[1]
+		} else {
+			break
+		}
+
 	}
 	return groups, nil
-}
-
-func nextURL(url string, link string) string {
-	if len(reLast.FindStringSubmatch(link)) > 1 {
-		lastPageURL := reLast.FindStringSubmatch(link)[1]
-
-		if url == lastPageURL {
-			return ""
-		}
-	} else {
-		return ""
-	}
-
-	if len(reNext.FindStringSubmatch(link)) > 1 {
-		return reNext.FindStringSubmatch(link)[1]
-	}
-
-	return ""
 }

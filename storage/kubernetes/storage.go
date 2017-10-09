@@ -85,7 +85,6 @@ func (c *Config) open(logger logrus.FieldLogger, errOnResources bool) (*client, 
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	logger.Info("creating custom Kubernetes resources")
 	if !cli.registerCustomResources(c.UseTPR) {
 		if errOnResources {
 			cancel()
