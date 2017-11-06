@@ -2,7 +2,7 @@
 
 ## Kubernetes
 
-Kubernetes tests run against a Kubernetes API server, and are enabled by the `DEX_KUBECONFIG` environment variable:
+Kubernetes tests will only run if the `DEX_KUBECONFIG` environment variable is set.
 
 ```
 $ export DEX_KUBECONFIG=~/.kube/config
@@ -10,11 +10,7 @@ $ go test -v -i ./storage/kubernetes
 $ go test -v ./storage/kubernetes
 ```
 
-These tests can be executed locally using docker by running the following script:
-
-```
-$ ./scripts/test-k8s.sh
-```
+Because third party resources creation isn't synchronized it's expected that the tests fail the first time. Fear not, and just run them again.
 
 ## Postgres
 
