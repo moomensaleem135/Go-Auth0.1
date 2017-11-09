@@ -223,6 +223,7 @@ func (s *Server) handleConnectorLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	scopes := parseScopes(authReq.Scopes)
+	showBacklink := len(s.connectors) > 1
 
 	switch r.Method {
 	case "GET":
@@ -250,7 +251,7 @@ func (s *Server) handleConnectorLogin(w http.ResponseWriter, r *http.Request) {
 			}
 			http.Redirect(w, r, callbackURL, http.StatusFound)
 		case connector.PasswordConnector:
-			if err := s.templates.password(w, r.URL.String(), "", false); err != nil {
+			if err := s.templates.password(w, r.URL.String(), "", usernamePrompt(conn), false, showBacklink); err != nil {
 				s.logger.Errorf("Server template error: %v", err)
 			}
 		case connector.SAMLConnector:
@@ -298,7 +299,7 @@ func (s *Server) handleConnectorLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !ok {
-			if err := s.templates.password(w, r.URL.String(), username, true); err != nil {
+			if err := s.templates.password(w, r.URL.String(), username, usernamePrompt(passwordConnector), true, showBacklink); err != nil {
 				s.logger.Errorf("Server template error: %v", err)
 			}
 			return
@@ -1004,4 +1005,12 @@ func (s *Server) tokenErrHelper(w http.ResponseWriter, typ string, description s
 	if err := tokenErr(w, typ, description, statusCode); err != nil {
 		s.logger.Errorf("token error response: %v", err)
 	}
+}
+
+// Check for username prompt override from connector. Defaults to "Username".
+func usernamePrompt(conn connector.PasswordConnector) string {
+	if attr := conn.Prompt(); attr != "" {
+		return attr
+	}
+	return "Username"
 }
