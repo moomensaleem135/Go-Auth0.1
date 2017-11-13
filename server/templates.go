@@ -190,14 +190,13 @@ func (t *templates) login(w http.ResponseWriter, connectors []connectorInfo) err
 	return renderTemplate(w, t.loginTmpl, data)
 }
 
-func (t *templates) password(w http.ResponseWriter, postURL, lastUsername, usernamePrompt string, lastWasInvalid, showBacklink bool) error {
+func (t *templates) password(w http.ResponseWriter, postURL, lastUsername, usernamePrompt string, lastWasInvalid bool) error {
 	data := struct {
 		PostURL        string
-		BackLink       bool
 		Username       string
 		UsernamePrompt string
 		Invalid        bool
-	}{postURL, showBacklink, lastUsername, usernamePrompt, lastWasInvalid}
+	}{postURL, lastUsername, usernamePrompt, lastWasInvalid}
 	return renderTemplate(w, t.passwordTmpl, data)
 }
 
