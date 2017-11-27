@@ -222,23 +222,22 @@ func (s *Server) handleConnectorLogin(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-
-	// Set the connector being used for the login.
-	updater := func(a storage.AuthRequest) (storage.AuthRequest, error) {
-		a.ConnectorID = connID
-		return a, nil
-	}
-	if err := s.storage.UpdateAuthRequest(authReqID, updater); err != nil {
-		s.logger.Errorf("Failed to set connector ID on auth request: %v", err)
-		s.renderError(w, http.StatusInternalServerError, "Database error.")
-		return
-	}
-
 	scopes := parseScopes(authReq.Scopes)
 	showBacklink := len(s.connectors) > 1
 
 	switch r.Method {
 	case "GET":
+		// Set the connector being used for the login.
+		updater := func(a storage.AuthRequest) (storage.AuthRequest, error) {
+			a.ConnectorID = connID
+			return a, nil
+		}
+		if err := s.storage.UpdateAuthRequest(authReqID, updater); err != nil {
+			s.logger.Errorf("Failed to set connector ID on auth request: %v", err)
+			s.renderError(w, http.StatusInternalServerError, "Database error.")
+			return
+		}
+
 		switch conn := conn.Connector.(type) {
 		case connector.CallbackConnector:
 			// Use the auth request ID as the "state" token.
@@ -997,7 +996,7 @@ func (s *Server) writeAccessToken(w http.ResponseWriter, idToken, accessToken, r
 }
 
 func (s *Server) renderError(w http.ResponseWriter, status int, description string) {
-	if err := s.templates.err(w, status, description); err != nil {
+	if err := s.templates.err(w, http.StatusText(status), description); err != nil {
 		s.logger.Errorf("Server template error: %v", err)
 	}
 }
