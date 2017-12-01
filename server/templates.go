@@ -226,16 +226,12 @@ func (t *templates) oob(w http.ResponseWriter, code string) error {
 	return renderTemplate(w, t.oobTmpl, data)
 }
 
-func (t *templates) err(w http.ResponseWriter, errCode int, errMsg string) error {
-	w.WriteHeader(errCode)
+func (t *templates) err(w http.ResponseWriter, errType string, errMsg string) error {
 	data := struct {
 		ErrType string
 		ErrMsg  string
-	}{http.StatusText(errCode), errMsg}
-	if err := t.errorTmpl.Execute(w, data); err != nil {
-		return fmt.Errorf("Error rendering template %s: %s", t.errorTmpl.Name(), err)
-	}
-	return nil
+	}{errType, errMsg}
+	return renderTemplate(w, t.errorTmpl, data)
 }
 
 // small io.Writer utility to determine if executing the template wrote to the underlying response writer.
