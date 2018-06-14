@@ -48,7 +48,6 @@ type Config struct {
 	RootCA        string `json:"rootCA"`
 	TeamNameField string `json:"teamNameField"`
 	LoadAllGroups bool   `json:"loadAllGroups"`
-	UseLoginAsId  bool   `json:"useLoginAsId"`
 }
 
 // Org holds org-team filters, in which teams are optional.
@@ -84,7 +83,6 @@ func (c *Config) Open(id string, logger logrus.FieldLogger) (connector.Connector
 		clientSecret: c.ClientSecret,
 		apiURL:       apiURL,
 		logger:       logger,
-		useLoginAsId: c.UseLoginAsId,
 	}
 
 	if c.HostName != "" {
@@ -150,8 +148,6 @@ type githubConnector struct {
 	teamNameField string
 	// if set to true and no orgs are configured then connector loads all user claims (all orgs and team)
 	loadAllGroups bool
-	// if set to true will use the users handle rather than their numeric id as the ID
-	useLoginAsId bool
 }
 
 // groupsRequired returns whether dex requires GitHub's 'read:org' scope. Dex
@@ -264,17 +260,12 @@ func (c *githubConnector) HandleCallback(s connector.Scopes, r *http.Request) (i
 	if username == "" {
 		username = user.Login
 	}
-
 	identity = connector.Identity{
 		UserID:        strconv.Itoa(user.ID),
 		Username:      username,
 		Email:         user.Email,
 		EmailVerified: true,
 	}
-	if c.useLoginAsId {
-		identity.UserID = user.Login
-	}
-
 
 	// Only set identity.Groups if 'orgs', 'org', or 'groups' scope are specified.
 	if c.groupsRequired(s.Groups) {
