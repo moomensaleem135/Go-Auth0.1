@@ -100,7 +100,6 @@ const (
 	errUnsupportedGrantType    = "unsupported_grant_type"
 	errInvalidGrant            = "invalid_grant"
 	errInvalidClient           = "invalid_client"
-	errInvalidConnectorID      = "invalid_connector_id"
 )
 
 const (
@@ -392,7 +391,6 @@ func (s *Server) parseAuthorizationRequest(r *http.Request) (req storage.AuthReq
 	clientID := q.Get("client_id")
 	state := q.Get("state")
 	nonce := q.Get("nonce")
-	connectorID := q.Get("connector_id")
 	// Some clients, like the old go-oidc, provide extra whitespace. Tolerate this.
 	scopes := strings.Fields(q.Get("scope"))
 	responseTypes := strings.Fields(q.Get("response_type"))
@@ -405,16 +403,6 @@ func (s *Server) parseAuthorizationRequest(r *http.Request) (req storage.AuthReq
 		}
 		s.logger.Errorf("Failed to get client: %v", err)
 		return req, &authErr{"", "", errServerError, ""}
-	}
-
-	if connectorID != "" {
-		connectors, err := s.storage.ListConnectors()
-		if err != nil {
-			return req, &authErr{"", "", errServerError, "Unable to retrieve connectors"}
-		}
-		if !validateConnectorID(connectors, connectorID) {
-			return req, &authErr{"", "", errInvalidRequest, "Invalid ConnectorID"}
-		}
 	}
 
 	if !validateRedirectURI(client, redirectURI) {
@@ -521,7 +509,6 @@ func (s *Server) parseAuthorizationRequest(r *http.Request) (req storage.AuthReq
 		Scopes:              scopes,
 		RedirectURI:         redirectURI,
 		ResponseTypes:       responseTypes,
-		ConnectorID:         connectorID,
 	}, nil
 }
 
@@ -579,15 +566,6 @@ func validateRedirectURI(client storage.Client, redirectURI string) bool {
 	}
 	host, _, err := net.SplitHostPort(u.Host)
 	return err == nil && host == "localhost"
-}
-
-func validateConnectorID(connectors []storage.Connector, connectorID string) bool {
-	for _, c := range connectors {
-		if c.ID == connectorID {
-			return true
-		}
-	}
-	return false
 }
 
 // storageKeySet implements the oidc.KeySet interface backed by Dex storage
