@@ -42,7 +42,7 @@ func (p *Etcd) Open(logger logrus.FieldLogger) (storage.Storage, error) {
 func (p *Etcd) open(logger logrus.FieldLogger) (*conn, error) {
 	cfg := clientv3.Config{
 		Endpoints:   p.Endpoints,
-		DialTimeout: defaultDialTimeout,
+		DialTimeout: defaultDialTimeout * time.Second,
 		Username:    p.Username,
 		Password:    p.Password,
 	}
