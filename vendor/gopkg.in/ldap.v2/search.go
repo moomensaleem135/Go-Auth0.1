@@ -68,21 +68,18 @@ import (
 	"gopkg.in/asn1-ber.v1"
 )
 
-// scope choices
 const (
 	ScopeBaseObject   = 0
 	ScopeSingleLevel  = 1
 	ScopeWholeSubtree = 2
 )
 
-// ScopeMap contains human readable descriptions of scope choices
 var ScopeMap = map[int]string{
 	ScopeBaseObject:   "Base Object",
 	ScopeSingleLevel:  "Single Level",
 	ScopeWholeSubtree: "Whole Subtree",
 }
 
-// derefAliases
 const (
 	NeverDerefAliases   = 0
 	DerefInSearching    = 1
@@ -90,7 +87,6 @@ const (
 	DerefAlways         = 3
 )
 
-// DerefMap contains human readable descriptions of derefAliases choices
 var DerefMap = map[int]string{
 	NeverDerefAliases:   "NeverDerefAliases",
 	DerefInSearching:    "DerefInSearching",
@@ -118,15 +114,11 @@ func NewEntry(dn string, attributes map[string][]string) *Entry {
 	}
 }
 
-// Entry represents a single search result entry
 type Entry struct {
-	// DN is the distinguished name of the entry
-	DN string
-	// Attributes are the returned attributes for the entry
+	DN         string
 	Attributes []*EntryAttribute
 }
 
-// GetAttributeValues returns the values for the named attribute, or an empty list
 func (e *Entry) GetAttributeValues(attribute string) []string {
 	for _, attr := range e.Attributes {
 		if attr.Name == attribute {
@@ -136,7 +128,6 @@ func (e *Entry) GetAttributeValues(attribute string) []string {
 	return []string{}
 }
 
-// GetRawAttributeValues returns the byte values for the named attribute, or an empty list
 func (e *Entry) GetRawAttributeValues(attribute string) [][]byte {
 	for _, attr := range e.Attributes {
 		if attr.Name == attribute {
@@ -146,7 +137,6 @@ func (e *Entry) GetRawAttributeValues(attribute string) [][]byte {
 	return [][]byte{}
 }
 
-// GetAttributeValue returns the first value for the named attribute, or ""
 func (e *Entry) GetAttributeValue(attribute string) string {
 	values := e.GetAttributeValues(attribute)
 	if len(values) == 0 {
@@ -155,7 +145,6 @@ func (e *Entry) GetAttributeValue(attribute string) string {
 	return values[0]
 }
 
-// GetRawAttributeValue returns the first value for the named attribute, or an empty slice
 func (e *Entry) GetRawAttributeValue(attribute string) []byte {
 	values := e.GetRawAttributeValues(attribute)
 	if len(values) == 0 {
@@ -164,7 +153,6 @@ func (e *Entry) GetRawAttributeValue(attribute string) []byte {
 	return values[0]
 }
 
-// Print outputs a human-readable description
 func (e *Entry) Print() {
 	fmt.Printf("DN: %s\n", e.DN)
 	for _, attr := range e.Attributes {
@@ -172,7 +160,6 @@ func (e *Entry) Print() {
 	}
 }
 
-// PrettyPrint outputs a human-readable description indenting
 func (e *Entry) PrettyPrint(indent int) {
 	fmt.Printf("%sDN: %s\n", strings.Repeat(" ", indent), e.DN)
 	for _, attr := range e.Attributes {
@@ -193,51 +180,38 @@ func NewEntryAttribute(name string, values []string) *EntryAttribute {
 	}
 }
 
-// EntryAttribute holds a single attribute
 type EntryAttribute struct {
-	// Name is the name of the attribute
-	Name string
-	// Values contain the string values of the attribute
-	Values []string
-	// ByteValues contain the raw values of the attribute
+	Name       string
+	Values     []string
 	ByteValues [][]byte
 }
 
-// Print outputs a human-readable description
 func (e *EntryAttribute) Print() {
 	fmt.Printf("%s: %s\n", e.Name, e.Values)
 }
 
-// PrettyPrint outputs a human-readable description with indenting
 func (e *EntryAttribute) PrettyPrint(indent int) {
 	fmt.Printf("%s%s: %s\n", strings.Repeat(" ", indent), e.Name, e.Values)
 }
 
-// SearchResult holds the server's response to a search request
 type SearchResult struct {
-	// Entries are the returned entries
-	Entries []*Entry
-	// Referrals are the returned referrals
+	Entries   []*Entry
 	Referrals []string
-	// Controls are the returned controls
-	Controls []Control
+	Controls  []Control
 }
 
-// Print outputs a human-readable description
 func (s *SearchResult) Print() {
 	for _, entry := range s.Entries {
 		entry.Print()
 	}
 }
 
-// PrettyPrint outputs a human-readable description with indenting
 func (s *SearchResult) PrettyPrint(indent int) {
 	for _, entry := range s.Entries {
 		entry.PrettyPrint(indent)
 	}
 }
 
-// SearchRequest represents a search request to send to the server
 type SearchRequest struct {
 	BaseDN       string
 	Scope        int
@@ -273,7 +247,6 @@ func (s *SearchRequest) encode() (*ber.Packet, error) {
 	return request, nil
 }
 
-// NewSearchRequest creates a new search request
 func NewSearchRequest(
 	BaseDN string,
 	Scope, DerefAliases, SizeLimit, TimeLimit int,
@@ -368,10 +341,10 @@ func (l *Conn) SearchWithPaging(searchRequest *SearchRequest, pagingSize uint32)
 	return searchResult, nil
 }
 
-// Search performs the given search request
 func (l *Conn) Search(searchRequest *SearchRequest) (*SearchResult, error) {
+	messageID := l.nextMessageID()
 	packet := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, "LDAP Request")
-	packet.AppendChild(ber.NewInteger(ber.ClassUniversal, ber.TypePrimitive, ber.TagInteger, l.nextMessageID(), "MessageID"))
+	packet.AppendChild(ber.NewInteger(ber.ClassUniversal, ber.TypePrimitive, ber.TagInteger, messageID, "MessageID"))
 	// encode search request
 	encodedSearchRequest, err := searchRequest.encode()
 	if err != nil {
@@ -385,11 +358,14 @@ func (l *Conn) Search(searchRequest *SearchRequest) (*SearchResult, error) {
 
 	l.Debug.PrintPacket(packet)
 
-	msgCtx, err := l.sendMessage(packet)
+	channel, err := l.sendMessage(packet)
 	if err != nil {
 		return nil, err
 	}
-	defer l.finishMessage(msgCtx)
+	if channel == nil {
+		return nil, NewError(ErrorNetwork, errors.New("ldap: could not send message"))
+	}
+	defer l.finishMessage(messageID)
 
 	result := &SearchResult{
 		Entries:   make([]*Entry, 0),
@@ -398,13 +374,13 @@ func (l *Conn) Search(searchRequest *SearchRequest) (*SearchResult, error) {
 
 	foundSearchResultDone := false
 	for !foundSearchResultDone {
-		l.Debug.Printf("%d: waiting for response", msgCtx.id)
-		packetResponse, ok := <-msgCtx.responses
+		l.Debug.Printf("%d: waiting for response", messageID)
+		packetResponse, ok := <-channel
 		if !ok {
-			return nil, NewError(ErrorNetwork, errors.New("ldap: response channel closed"))
+			return nil, NewError(ErrorNetwork, errors.New("ldap: channel closed"))
 		}
 		packet, err = packetResponse.ReadPacket()
-		l.Debug.Printf("%d: got response %p", msgCtx.id, packet)
+		l.Debug.Printf("%d: got response %p", messageID, packet)
 		if err != nil {
 			return nil, err
 		}
@@ -445,6 +421,6 @@ func (l *Conn) Search(searchRequest *SearchRequest) (*SearchResult, error) {
 			result.Referrals = append(result.Referrals, packet.Children[1].Children[0].Value.(string))
 		}
 	}
-	l.Debug.Printf("%d: returning", msgCtx.id)
+	l.Debug.Printf("%d: returning", messageID)
 	return result, nil
 }

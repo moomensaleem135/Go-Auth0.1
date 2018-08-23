@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"regexp"
 	"strconv"
 
 	"github.com/sirupsen/logrus"
@@ -17,11 +18,14 @@ import (
 )
 
 const (
-	// read operations of the /api/v4/user endpoint
+	// https://docs.gitlab.com/ee/integration/oauth_provider.html#authorized-applications
 	scopeUser = "read_user"
-	// used to retrieve groups from /oauth/userinfo
-	// https://docs.gitlab.com/ee/integration/openid_connect_provider.html
-	scopeOpenID = "openid"
+	scopeAPI  = "api"
+)
+
+var (
+	reNext = regexp.MustCompile("<([^>]+)>; rel=\"next\"")
+	reLast = regexp.MustCompile("<([^>]+)>; rel=\"last\"")
 )
 
 // Config holds configuration options for gilab logins.
@@ -39,6 +43,12 @@ type gitlabUser struct {
 	State    string
 	Email    string
 	IsAdmin  bool
+}
+
+type gitlabGroup struct {
+	ID   int
+	Name string
+	Path string
 }
 
 // Open returns a strategy for logging in through GitLab.
@@ -77,7 +87,7 @@ type gitlabConnector struct {
 func (c *gitlabConnector) oauth2Config(scopes connector.Scopes) *oauth2.Config {
 	gitlabScopes := []string{scopeUser}
 	if scopes.Groups {
-		gitlabScopes = []string{scopeUser, scopeOpenID}
+		gitlabScopes = []string{scopeAPI}
 	}
 
 	gitlabEndpoint := oauth2.Endpoint{AuthURL: c.baseURL + "/oauth/authorize", TokenURL: c.baseURL + "/oauth/token"}
@@ -229,30 +239,64 @@ func (c *gitlabConnector) user(ctx context.Context, client *http.Client) (gitlab
 // The HTTP passed client is expected to be constructed by the golang.org/x/oauth2 package,
 // which inserts a bearer token as part of the request.
 func (c *gitlabConnector) groups(ctx context.Context, client *http.Client) ([]string, error) {
-	req, err := http.NewRequest("GET", c.baseURL+"/oauth/userinfo", nil)
-	if err != nil {
-		return nil, fmt.Errorf("gitlab: new req: %v", err)
-	}
-	req = req.WithContext(ctx)
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("gitlab: get URL %v", err)
-	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, err := ioutil.ReadAll(resp.Body)
+	apiURL := c.baseURL + "/api/v4/groups"
+
+	groups := []string{}
+	var gitlabGroups []gitlabGroup
+	for {
+		// 100 is the maximum number for per_page that allowed by gitlab
+		req, err := http.NewRequest("GET", apiURL, nil)
 		if err != nil {
-			return nil, fmt.Errorf("gitlab: read body: %v", err)
+			return nil, fmt.Errorf("gitlab: new req: %v", err)
 		}
-		return nil, fmt.Errorf("%s: %s", resp.Status, body)
+		req = req.WithContext(ctx)
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("gitlab: get groups: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			body, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				return nil, fmt.Errorf("gitlab: read body: %v", err)
+			}
+			return nil, fmt.Errorf("%s: %s", resp.Status, body)
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&gitlabGroups); err != nil {
+			return nil, fmt.Errorf("gitlab: unmarshal groups: %v", err)
+		}
+
+		for _, group := range gitlabGroups {
+			groups = append(groups, group.Name)
+		}
+
+		link := resp.Header.Get("Link")
+
+		apiURL = nextURL(apiURL, link)
+		if apiURL == "" {
+			break
+		}
 	}
-	u := struct {
-		Groups []string
-	}{}
-	if err := json.NewDecoder(resp.Body).Decode(&u); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %v", err)
+	return groups, nil
+}
+
+func nextURL(url string, link string) string {
+	if len(reLast.FindStringSubmatch(link)) > 1 {
+		lastPageURL := reLast.FindStringSubmatch(link)[1]
+
+		if url == lastPageURL {
+			return ""
+		}
+	} else {
+		return ""
 	}
 
-	return u.Groups, nil
+	if len(reNext.FindStringSubmatch(link)) > 1 {
+		return reNext.FindStringSubmatch(link)[1]
+	}
+
+	return ""
 }
