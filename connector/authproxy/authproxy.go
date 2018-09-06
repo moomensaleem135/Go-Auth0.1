@@ -8,9 +8,8 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/coreos/dex/connector"
 	"github.com/sirupsen/logrus"
-
-	"github.com/dexidp/dex/connector"
 )
 
 // Config holds the configuration parameters for a connector which returns an

@@ -7,10 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/coreos/dex/storage"
+	"github.com/coreos/dex/storage/kubernetes/k8sapi"
 	"github.com/sirupsen/logrus"
-
-	"github.com/dexidp/dex/storage"
-	"github.com/dexidp/dex/storage/kubernetes/k8sapi"
 )
 
 const (

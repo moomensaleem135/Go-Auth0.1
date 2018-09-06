@@ -6,10 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coreos/dex/storage"
+	"github.com/coreos/dex/storage/memory"
 	"github.com/sirupsen/logrus"
-
-	"github.com/dexidp/dex/storage"
-	"github.com/dexidp/dex/storage/memory"
 )
 
 func signingKeyID(t *testing.T, s storage.Storage) string {

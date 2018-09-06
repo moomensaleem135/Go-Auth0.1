@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"runtime"
 
+	"github.com/coreos/dex/version"
 	"github.com/spf13/cobra"
-
-	"github.com/dexidp/dex/version"
 )
 
 func commandVersion() *cobra.Command {

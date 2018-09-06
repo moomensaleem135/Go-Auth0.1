@@ -6,9 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/coreos/dex/storage"
 	"github.com/sirupsen/logrus"
-
-	"github.com/dexidp/dex/storage"
 )
 
 func TestStaticClients(t *testing.T) {
