@@ -33,7 +33,6 @@ var (
 	_ connector.CallbackConnector = &Callback{}
 
 	_ connector.PasswordConnector = passwordConnector{}
-	_ connector.RefreshConnector  = passwordConnector{}
 )
 
 // Callback is a connector that requires no user interaction and always returns the same identity.
@@ -114,7 +113,3 @@ func (p passwordConnector) Login(ctx context.Context, s connector.Scopes, userna
 }
 
 func (p passwordConnector) Prompt() string { return "" }
-
-func (p passwordConnector) Refresh(_ context.Context, _ connector.Scopes, identity connector.Identity) (connector.Identity, error) {
-	return identity, nil
-}
