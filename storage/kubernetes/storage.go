@@ -148,12 +148,6 @@ func (cli *client) registerCustomResources(useTPR bool) (ok bool) {
 			resourceName = r.ObjectMeta.Name
 		} else {
 			r := customResourceDefinitions[i]
-			var i interface{}
-			cli.logger.Infof("checking if resource %s has been created already...", r.ObjectMeta.Name)
-			if err := cli.list(r.Spec.Names.Plural, &i); err == nil {
-				cli.logger.Infof("The custom resource already created %s, hence continue", r.ObjectMeta.Name)
-				continue
-			}
 			err = cli.postResource("apiextensions.k8s.io/v1beta1", "", "customresourcedefinitions", r)
 			resourceName = r.ObjectMeta.Name
 		}
