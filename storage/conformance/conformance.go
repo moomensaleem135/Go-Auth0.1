@@ -1,3 +1,5 @@
+// +build go1.7
+
 // Package conformance provides conformance tests for storage implementations.
 package conformance
 
