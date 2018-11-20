@@ -3,7 +3,6 @@ package sql
 import (
 	"database/sql"
 	"fmt"
-	"net"
 	"regexp"
 	"strconv"
 	"strings"
@@ -117,24 +116,12 @@ func (p *Postgres) createDataSourceName() string {
 
 	addParam("connect_timeout", strconv.Itoa(p.ConnectionTimeout))
 
-	// detect host:port for backwards-compatibility
-	host, port, err := net.SplitHostPort(p.Host)
-	if err != nil {
-		// not host:port, probably unix socket or bare address
-
-		host = p.Host
-
-		if p.Port != 0 {
-			port = strconv.Itoa(int(p.Port))
-		}
+	if p.Host != "" {
+		addParam("host", dataSourceStr(p.Host))
 	}
 
-	if host != "" {
-		addParam("host", dataSourceStr(host))
-	}
-
-	if port != "" {
-		addParam("port", port)
+	if p.Port != 0 {
+		addParam("port", strconv.Itoa(int(p.Port)))
 	}
 
 	if p.User != "" {
