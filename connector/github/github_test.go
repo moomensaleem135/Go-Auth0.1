@@ -115,9 +115,6 @@ func TestUsernameIncludedInFederatedIdentity(t *testing.T) {
 			"access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9",
 			"expires_in":   "30",
 		}},
-		"/user/orgs": {
-			data: []org{{Login: "org-1"}},
-		},
 	})
 	defer s.Close()
 
@@ -128,18 +125,10 @@ func TestUsernameIncludedInFederatedIdentity(t *testing.T) {
 	expectNil(t, err)
 
 	c := githubConnector{apiURL: s.URL, hostName: hostURL.Host, httpClient: newClient()}
-	identity, err := c.HandleCallback(connector.Scopes{Groups: true}, req)
+	identity, err := c.HandleCallback(connector.Scopes{}, req)
 
 	expectNil(t, err)
 	expectEquals(t, identity.Username, "some-login")
-	expectEquals(t, 0, len(identity.Groups))
-
-	c = githubConnector{apiURL: s.URL, hostName: hostURL.Host, httpClient: newClient(), loadAllGroups: true}
-	identity, err = c.HandleCallback(connector.Scopes{Groups: true}, req)
-
-	expectNil(t, err)
-	expectEquals(t, identity.Username, "some-login")
-	expectEquals(t, identity.Groups, []string{"org-1"})
 
 }
 
