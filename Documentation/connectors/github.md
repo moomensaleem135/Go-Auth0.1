@@ -42,12 +42,8 @@ connectors:
     # For example if a user is part of the "engineering" team of the "coreos"
     # org, the group claim would include "coreos:engineering".
     #
-    # If orgs are specified in the config then user MUST be a member of at least one of the specified orgs to
+    # A user MUST be a member of at least one of the following orgs to
     # authenticate with dex.
-    #
-    # If neither 'org' nor 'orgs' are specified in the config and 'loadAllGroups' setting set to true then user
-    # authenticate with ALL user's Github groups. Typical use case for this setup:
-    # provide read-only access to everyone and give full permissions if user has 'my-organization:admins-team' group claim.  
     orgs:
     - name: my-organization
       # Include all teams as claims.
@@ -56,16 +52,13 @@ connectors:
       teams:
       - red-team
       - blue-team
-    # Flag which indicates that all user groups and teams should be loaded.
-    loadAllGroups: false
 
-    # Optional choice between 'name' (default), 'slug', or 'both'.
+    # Optional choice between 'name' (default) or 'slug'.
     #
     # As an example, group claims for member of 'Site Reliability Engineers' in
     # Acme organization would yield:
     #   - ['acme:Site Reliability Engineers'] for 'name'
     #   - ['acme:site-reliability-engineers'] for 'slug'
-    #   - ['acme:Site Reliability Engineers', 'acme:site-reliability-engineers'] for 'both'
     teamNameField: slug
 ```
 

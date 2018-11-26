@@ -43,8 +43,6 @@ Dex currently allows insecure connections because the project is still verifying
 
 User entries are expected to have an email attribute (configurable through `emailAttr`), and a display name attribute (configurable through `nameAttr`). `*Attr` attributes could be set to "DN" in situations where it is needed but not available elsewhere, and if "DN" attribute does not exist in the record.
 
-For the purposes of configuring this connector, "DN" is case-sensitive and should always be capitalised.
-
 The following is an example config file that can be used by the LDAP connector to authenticate a user.
 
 ```yaml
@@ -264,7 +262,7 @@ connectors:
     # freeIPA server's CA
     rootCA: ca.crt
     userSearch:
-      # Would translate to the query "(&(objectClass=posixAccount)(uid=<username>))".
+      # Would translate to the query "(&(objectClass=person)(uid=<username>))".
       baseDN: cn=users,dc=freeipa,dc=example,dc=com
       filter: "(objectClass=posixAccount)"
       username: uid

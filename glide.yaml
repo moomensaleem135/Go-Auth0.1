@@ -19,7 +19,7 @@ import:
 
 # LDAP dependencies.
 - package: gopkg.in/ldap.v2
-  version: v2.5.1
+  version: 0e7db8eb77695b5a952f0e5d78df9ab160050c73
 - package: gopkg.in/asn1-ber.v1
   version: 4e86f4367175e39f69d9358a5f17b4dda270378d
 
@@ -114,7 +114,13 @@ import:
 - package: github.com/mattn/go-sqlite3
   version: 3fb7a0e792edd47bf0cf1e919dfc14e2be412e15
 - package: github.com/lib/pq
-  version: 9eb73efc1fcc404148b56765b0d3f61d9a5ef8ee
+  version: 50761b0867bd1d9d069276790bcd4a3bccf2324a
+- package: github.com/go-sql-driver/mysql
+  version: 0b58b37b664c21f3010e836f1b931e1d0b0b0685
+- package: github.com/cockroachdb/cockroach-go
+  version: 31611c0501c812f437d4861d87d117053967c955
+  subpackages:
+  - crdb
 
 # etcd driver
 - package: github.com/coreos/etcd
