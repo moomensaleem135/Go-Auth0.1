@@ -18,14 +18,10 @@ func TestUnmarshalConfig(t *testing.T) {
 	rawConfig := []byte(`
 issuer: http://127.0.0.1:5556/dex
 storage:
-  type: postgres
+  type: sqlite3
   config:
-    host: 10.0.0.1
-    port: 65432
-    maxOpenConns: 5
-    maxIdleConns: 3
-    connMaxLifetime: 30
-    connectionTimeout: 3
+    file: examples/dex.db
+
 web:
   http: 127.0.0.1:5556
 staticClients:
@@ -73,14 +69,9 @@ logger:
 	want := Config{
 		Issuer: "http://127.0.0.1:5556/dex",
 		Storage: Storage{
-			Type: "postgres",
-			Config: &sql.Postgres{
-				Host:              "10.0.0.1",
-				Port:              65432,
-				MaxOpenConns:      5,
-				MaxIdleConns:      3,
-				ConnMaxLifetime:   30,
-				ConnectionTimeout: 3,
+			Type: "sqlite3",
+			Config: &sql.SQLite3{
+				File: "examples/dex.db",
 			},
 		},
 		Web: Web{
