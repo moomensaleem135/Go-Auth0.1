@@ -29,7 +29,6 @@ func renderIndex(w http.ResponseWriter) {
 
 type tokenTmplData struct {
 	IDToken      string
-	AccessToken  string
 	RefreshToken string
 	RedirectURL  string
 	Claims       string
@@ -49,8 +48,7 @@ pre {
     </style>
   </head>
   <body>
-    <p> ID Token: <pre><code>{{ .IDToken }}</code></pre></p>
-    <p> Access Token: <pre><code>{{ .AccessToken }}</code></pre></p>
+    <p> Token: <pre><code>{{ .IDToken }}</code></pre></p>
     <p> Claims: <pre><code>{{ .Claims }}</code></pre></p>
 	{{ if .RefreshToken }}
     <p> Refresh Token: <pre><code>{{ .RefreshToken }}</code></pre></p>
@@ -63,10 +61,9 @@ pre {
 </html>
 `))
 
-func renderToken(w http.ResponseWriter, redirectURL, idToken, accessToken, refreshToken string, claims []byte) {
+func renderToken(w http.ResponseWriter, redirectURL, idToken, refreshToken string, claims []byte) {
 	renderTemplate(w, tokenTmpl, tokenTmplData{
 		IDToken:      idToken,
-		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		RedirectURL:  redirectURL,
 		Claims:       string(claims),
