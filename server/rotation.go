@@ -12,7 +12,8 @@ import (
 
 	"gopkg.in/square/go-jose.v2"
 
-	"github.com/dexidp/dex/pkg/log"
+	"github.com/sirupsen/logrus"
+
 	"github.com/dexidp/dex/storage"
 )
 
@@ -61,7 +62,7 @@ type keyRotater struct {
 	strategy rotationStrategy
 	now      func() time.Time
 
-	logger log.Logger
+	logger logrus.FieldLogger
 }
 
 // startKeyRotation begins key rotation in a new goroutine, closing once the context is canceled.

@@ -3,9 +3,10 @@ package sql
 
 import (
 	"database/sql"
-	"github.com/dexidp/dex/pkg/log"
 	"regexp"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	// import third party drivers
 	_ "github.com/lib/pq"
@@ -112,7 +113,7 @@ func (c *conn) translateArgs(args []interface{}) []interface{} {
 type conn struct {
 	db                 *sql.DB
 	flavor             flavor
-	logger             log.Logger
+	logger             logrus.FieldLogger
 	alreadyExistsCheck func(err error) bool
 }
 

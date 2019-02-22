@@ -12,8 +12,9 @@ import (
 
 	"gopkg.in/ldap.v2"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/dexidp/dex/connector"
-	"github.com/dexidp/dex/pkg/log"
 )
 
 // Config holds the configuration parameters for the LDAP connector. The LDAP
@@ -164,7 +165,7 @@ func parseScope(s string) (int, bool) {
 }
 
 // Open returns an authentication strategy using LDAP.
-func (c *Config) Open(id string, logger log.Logger) (connector.Connector, error) {
+func (c *Config) Open(id string, logger logrus.FieldLogger) (connector.Connector, error) {
 	conn, err := c.OpenConnector(logger)
 	if err != nil {
 		return nil, err
@@ -178,7 +179,7 @@ type refreshData struct {
 }
 
 // OpenConnector is the same as Open but returns a type with all implemented connector interfaces.
-func (c *Config) OpenConnector(logger log.Logger) (interface {
+func (c *Config) OpenConnector(logger logrus.FieldLogger) (interface {
 	connector.Connector
 	connector.PasswordConnector
 	connector.RefreshConnector
@@ -186,7 +187,7 @@ func (c *Config) OpenConnector(logger log.Logger) (interface {
 	return c.openConnector(logger)
 }
 
-func (c *Config) openConnector(logger log.Logger) (*ldapConnector, error) {
+func (c *Config) openConnector(logger logrus.FieldLogger) (*ldapConnector, error) {
 
 	requiredFields := []struct {
 		name string
@@ -258,7 +259,7 @@ type ldapConnector struct {
 
 	tlsConfig *tls.Config
 
-	logger log.Logger
+	logger logrus.FieldLogger
 }
 
 var (

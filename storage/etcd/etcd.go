@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
+	"github.com/sirupsen/logrus"
 
-	"github.com/dexidp/dex/pkg/log"
 	"github.com/dexidp/dex/storage"
 )
 
@@ -29,7 +29,7 @@ const (
 
 type conn struct {
 	db     *clientv3.Client
-	logger log.Logger
+	logger logrus.FieldLogger
 }
 
 func (c *conn) Close() error {

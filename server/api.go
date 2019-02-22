@@ -10,8 +10,9 @@ import (
 	// https://github.com/grpc/grpc-go/issues/711
 	"golang.org/x/net/context"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/dexidp/dex/api"
-	"github.com/dexidp/dex/pkg/log"
 	"github.com/dexidp/dex/server/internal"
 	"github.com/dexidp/dex/storage"
 	"github.com/dexidp/dex/version"
@@ -33,7 +34,7 @@ const (
 )
 
 // NewAPI returns a server which implements the gRPC API interface.
-func NewAPI(s storage.Storage, logger log.Logger) api.DexServer {
+func NewAPI(s storage.Storage, logger logrus.FieldLogger) api.DexServer {
 	return dexAPI{
 		s:      s,
 		logger: logger,
@@ -42,7 +43,7 @@ func NewAPI(s storage.Storage, logger log.Logger) api.DexServer {
 
 type dexAPI struct {
 	s      storage.Storage
-	logger log.Logger
+	logger logrus.FieldLogger
 }
 
 func (d dexAPI) CreateClient(ctx context.Context, req *api.CreateClientReq) (*api.CreateClientResp, error) {

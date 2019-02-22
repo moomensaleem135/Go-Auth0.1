@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/dexidp/dex/pkg/log"
+	"github.com/sirupsen/logrus"
 )
 
 // Tests for this code are in the "memory" package, since this package doesn't
@@ -89,11 +89,11 @@ type staticPasswordsStorage struct {
 	// A map of passwords that is indexed by lower-case email ids
 	passwordsByEmail map[string]Password
 
-	logger log.Logger
+	logger logrus.FieldLogger
 }
 
 // WithStaticPasswords returns a storage with a read-only set of passwords.
-func WithStaticPasswords(s Storage, staticPasswords []Password, logger log.Logger) Storage {
+func WithStaticPasswords(s Storage, staticPasswords []Password, logger logrus.FieldLogger) Storage {
 	passwordsByEmail := make(map[string]Password, len(staticPasswords))
 	for _, p := range staticPasswords {
 		//Enable case insensitive email comparison.
