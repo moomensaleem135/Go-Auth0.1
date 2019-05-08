@@ -237,10 +237,6 @@ func (a *app) handleLogin(w http.ResponseWriter, r *http.Request) {
 	for _, client := range clients {
 		scopes = append(scopes, "audience:server:client_id:"+client)
 	}
-	connectorID := ""
-	if id := r.FormValue("connector_id"); id != "" {
-		connectorID = id
-	}
 
 	authCodeURL := ""
 	scopes = append(scopes, "openid", "profile", "email")
@@ -251,9 +247,6 @@ func (a *app) handleLogin(w http.ResponseWriter, r *http.Request) {
 		authCodeURL = a.oauth2Config(scopes).AuthCodeURL(exampleAppState)
 	} else {
 		authCodeURL = a.oauth2Config(scopes).AuthCodeURL(exampleAppState, oauth2.AccessTypeOffline)
-	}
-	if connectorID != "" {
-		authCodeURL = authCodeURL + "&connector_id=" + connectorID
 	}
 
 	http.Redirect(w, r, authCodeURL, http.StatusSeeOther)
@@ -314,7 +307,7 @@ func (a *app) handleCallback(w http.ResponseWriter, r *http.Request) {
 
 	idToken, err := a.verifier.Verify(r.Context(), rawIDToken)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to verify ID token: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Failed to verify ID token: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -325,16 +318,10 @@ func (a *app) handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var claims json.RawMessage
-	if err := idToken.Claims(&claims); err != nil {
-		http.Error(w, fmt.Sprintf("error decoding ID token claims: %v", err), http.StatusInternalServerError)
-		return
-	}
+	idToken.Claims(&claims)
 
 	buff := new(bytes.Buffer)
-	if err := json.Indent(buff, []byte(claims), "", "  "); err != nil {
-		http.Error(w, fmt.Sprintf("error indenting ID token claims: %v", err), http.StatusInternalServerError)
-		return
-	}
+	json.Indent(buff, []byte(claims), "", "  ")
 
-	renderToken(w, a.redirectURI, rawIDToken, accessToken, token.RefreshToken, buff.String())
+	renderToken(w, a.redirectURI, rawIDToken, accessToken, token.RefreshToken, buff.Bytes())
 }

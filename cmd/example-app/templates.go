@@ -15,11 +15,8 @@ var indexTmpl = template.Must(template.New("index.html").Parse(`<html>
        <p>
          Extra scopes:<input type="text" name="extra_scopes" placeholder="list of scopes">
        </p>
-       <p>
-         Connector ID:<input type="text" name="connector_id" placeholder="connector id">
-       </p>
-       <p>
-         Request offline access:<input type="checkbox" name="offline_access" value="yes" checked>
+	   <p>
+	     Request offline access:<input type="checkbox" name="offline_access" value="yes" checked>
        </p>
        <input type="submit" value="Login">
     </form>
@@ -66,13 +63,13 @@ pre {
 </html>
 `))
 
-func renderToken(w http.ResponseWriter, redirectURL, idToken, accessToken, refreshToken, claims string) {
+func renderToken(w http.ResponseWriter, redirectURL, idToken, accessToken, refreshToken string, claims []byte) {
 	renderTemplate(w, tokenTmpl, tokenTmplData{
 		IDToken:      idToken,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		RedirectURL:  redirectURL,
-		Claims:       claims,
+		Claims:       string(claims),
 	})
 }
 
