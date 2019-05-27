@@ -47,9 +47,6 @@ type Config struct {
 
 	// Configurable key which contains the user id claim
 	UserIDKey string `json:"userIDKey"`
-
-	// Configurable key which contains the user name claim
-	UserNameKey string `json:"userNameKey"`
 }
 
 // Domains that don't support basic auth. golang.org/x/oauth2 has an internal
@@ -134,7 +131,6 @@ func (c *Config) Open(id string, logger log.Logger) (conn connector.Connector, e
 		insecureSkipEmailVerified: c.InsecureSkipEmailVerified,
 		getUserInfo:               c.GetUserInfo,
 		userIDKey:                 c.UserIDKey,
-		userNameKey:               c.UserNameKey,
 	}, nil
 }
 
@@ -155,7 +151,6 @@ type oidcConnector struct {
 	insecureSkipEmailVerified bool
 	getUserInfo               bool
 	userIDKey                 string
-	userNameKey               string
 }
 
 func (c *oidcConnector) Close() error {
@@ -214,13 +209,9 @@ func (c *oidcConnector) HandleCallback(s connector.Scopes, r *http.Request) (ide
 		return identity, fmt.Errorf("oidc: failed to decode claims: %v", err)
 	}
 
-	userNameKey := "name"
-	if c.userNameKey != "" {
-		userNameKey = c.userNameKey
-	}
-	name, found := claims[userNameKey].(string)
+	name, found := claims["name"].(string)
 	if !found {
-		return identity, fmt.Errorf("missing \"%s\" claim", userNameKey)
+		return identity, errors.New("missing \"name\" claim")
 	}
 	email, found := claims["email"].(string)
 	if !found {
@@ -228,11 +219,7 @@ func (c *oidcConnector) HandleCallback(s connector.Scopes, r *http.Request) (ide
 	}
 	emailVerified, found := claims["email_verified"].(bool)
 	if !found {
-		if c.insecureSkipEmailVerified {
-			emailVerified = true
-		} else {
-			return identity, errors.New("missing \"email_verified\" claim")
-		}
+		return identity, errors.New("missing \"email_verified\" claim")
 	}
 	hostedDomain, _ := claims["hd"].(string)
 
@@ -248,6 +235,10 @@ func (c *oidcConnector) HandleCallback(s connector.Scopes, r *http.Request) (ide
 		if !found {
 			return identity, fmt.Errorf("oidc: unexpected hd claim %v", hostedDomain)
 		}
+	}
+
+	if c.insecureSkipEmailVerified {
+		emailVerified = true
 	}
 
 	if c.getUserInfo {

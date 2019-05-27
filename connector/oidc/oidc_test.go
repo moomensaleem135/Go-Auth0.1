@@ -45,81 +45,29 @@ func TestHandleCallback(t *testing.T) {
 	t.Helper()
 
 	tests := []struct {
-		name                      string
-		userIDKey                 string
-		userNameKey               string
-		insecureSkipEmailVerified bool
-		expectUserID              string
-		expectUserName            string
-		token                     map[string]interface{}
+		name         string
+		userIDKey    string
+		expectUserID string
 	}{
-		{
-			name:           "simpleCase",
-			userIDKey:      "", // not configured
-			userNameKey:    "", // not configured
-			expectUserID:   "subvalue",
-			expectUserName: "namevalue",
-			token: map[string]interface{}{
-				"sub":            "subvalue",
-				"name":           "namevalue",
-				"email":          "emailvalue",
-				"email_verified": true,
-			},
-		},
-		{
-			name:                      "email_verified not in claims, configured to be skipped",
-			insecureSkipEmailVerified: true,
-			expectUserID:              "subvalue",
-			expectUserName:            "namevalue",
-			token: map[string]interface{}{
-				"sub":   "subvalue",
-				"name":  "namevalue",
-				"email": "emailvalue",
-			},
-		},
-		{
-			name:           "withUserIDKey",
-			userIDKey:      "name",
-			expectUserID:   "namevalue",
-			expectUserName: "namevalue",
-			token: map[string]interface{}{
-				"sub":            "subvalue",
-				"name":           "namevalue",
-				"email":          "emailvalue",
-				"email_verified": true,
-			},
-		},
-		{
-			name:           "withUserNameKey",
-			userNameKey:    "user_name",
-			expectUserID:   "subvalue",
-			expectUserName: "username",
-			token: map[string]interface{}{
-				"sub":            "subvalue",
-				"user_name":      "username",
-				"email":          "emailvalue",
-				"email_verified": true,
-			},
-		},
+		{"simpleCase", "", "sub"},
+		{"withUserIDKey", "name", "name"},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			testServer, err := setupServer(tc.token)
+			testServer, err := setupServer()
 			if err != nil {
 				t.Fatal("failed to setup test server", err)
 			}
 			defer testServer.Close()
 			serverURL := testServer.URL
 			config := Config{
-				Issuer:                    serverURL,
-				ClientID:                  "clientID",
-				ClientSecret:              "clientSecret",
-				Scopes:                    []string{"groups"},
-				RedirectURI:               fmt.Sprintf("%s/callback", serverURL),
-				UserIDKey:                 tc.userIDKey,
-				UserNameKey:               tc.userNameKey,
-				InsecureSkipEmailVerified: tc.insecureSkipEmailVerified,
+				Issuer:       serverURL,
+				ClientID:     "clientID",
+				ClientSecret: "clientSecret",
+				Scopes:       []string{"groups"},
+				RedirectURI:  fmt.Sprintf("%s/callback", serverURL),
+				UserIDKey:    tc.userIDKey,
 			}
 
 			conn, err := newConnector(config)
@@ -138,14 +86,14 @@ func TestHandleCallback(t *testing.T) {
 			}
 
 			expectEquals(t, identity.UserID, tc.expectUserID)
-			expectEquals(t, identity.Username, tc.expectUserName)
-			expectEquals(t, identity.Email, "emailvalue")
+			expectEquals(t, identity.Username, "name")
+			expectEquals(t, identity.Email, "email")
 			expectEquals(t, identity.EmailVerified, true)
 		})
 	}
 }
 
-func setupServer(tok map[string]interface{}) (*httptest.Server, error) {
+func setupServer() (*httptest.Server, error) {
 	key, err := rsa.GenerateKey(rand.Reader, 1024)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate rsa key: %v", err)
@@ -173,10 +121,16 @@ func setupServer(tok map[string]interface{}) (*httptest.Server, error) {
 
 	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
 		url := fmt.Sprintf("http://%s", r.Host)
-		tok["iss"] = url
-		tok["exp"] = time.Now().Add(time.Hour).Unix()
-		tok["aud"] = "clientID"
-		token, err := newToken(&jwk, tok)
+
+		token, err := newToken(&jwk, map[string]interface{}{
+			"iss":            url,
+			"aud":            "clientID",
+			"exp":            time.Now().Add(time.Hour).Unix(),
+			"sub":            "sub",
+			"name":           "name",
+			"email":          "email",
+			"email_verified": true,
+		})
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
