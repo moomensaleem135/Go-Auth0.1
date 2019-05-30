@@ -47,18 +47,14 @@ func TestHandleCallback(t *testing.T) {
 	tests := []struct {
 		name                      string
 		userIDKey                 string
-		userNameKey               string
 		insecureSkipEmailVerified bool
 		expectUserID              string
-		expectUserName            string
 		token                     map[string]interface{}
 	}{
 		{
-			name:           "simpleCase",
-			userIDKey:      "", // not configured
-			userNameKey:    "", // not configured
-			expectUserID:   "subvalue",
-			expectUserName: "namevalue",
+			name:         "simpleCase",
+			userIDKey:    "", // not configured
+			expectUserID: "subvalue",
 			token: map[string]interface{}{
 				"sub":            "subvalue",
 				"name":           "namevalue",
@@ -70,7 +66,6 @@ func TestHandleCallback(t *testing.T) {
 			name:                      "email_verified not in claims, configured to be skipped",
 			insecureSkipEmailVerified: true,
 			expectUserID:              "subvalue",
-			expectUserName:            "namevalue",
 			token: map[string]interface{}{
 				"sub":   "subvalue",
 				"name":  "namevalue",
@@ -78,25 +73,12 @@ func TestHandleCallback(t *testing.T) {
 			},
 		},
 		{
-			name:           "withUserIDKey",
-			userIDKey:      "name",
-			expectUserID:   "namevalue",
-			expectUserName: "namevalue",
+			name:         "withUserIDKey",
+			userIDKey:    "name",
+			expectUserID: "namevalue",
 			token: map[string]interface{}{
 				"sub":            "subvalue",
 				"name":           "namevalue",
-				"email":          "emailvalue",
-				"email_verified": true,
-			},
-		},
-		{
-			name:           "withUserNameKey",
-			userNameKey:    "user_name",
-			expectUserID:   "subvalue",
-			expectUserName: "username",
-			token: map[string]interface{}{
-				"sub":            "subvalue",
-				"user_name":      "username",
 				"email":          "emailvalue",
 				"email_verified": true,
 			},
@@ -118,7 +100,6 @@ func TestHandleCallback(t *testing.T) {
 				Scopes:                    []string{"groups"},
 				RedirectURI:               fmt.Sprintf("%s/callback", serverURL),
 				UserIDKey:                 tc.userIDKey,
-				UserNameKey:               tc.userNameKey,
 				InsecureSkipEmailVerified: tc.insecureSkipEmailVerified,
 			}
 
@@ -138,7 +119,7 @@ func TestHandleCallback(t *testing.T) {
 			}
 
 			expectEquals(t, identity.UserID, tc.expectUserID)
-			expectEquals(t, identity.Username, tc.expectUserName)
+			expectEquals(t, identity.Username, "namevalue")
 			expectEquals(t, identity.Email, "emailvalue")
 			expectEquals(t, identity.EmailVerified, true)
 		})
