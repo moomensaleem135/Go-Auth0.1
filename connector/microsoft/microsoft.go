@@ -15,7 +15,6 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/dexidp/dex/connector"
-	groups_pkg "github.com/dexidp/dex/pkg/groups"
 	"github.com/dexidp/dex/pkg/log"
 )
 
@@ -312,9 +311,22 @@ func (c *microsoftConnector) getGroups(ctx context.Context, client *http.Client,
 	}
 
 	// ensure that the user is in at least one required group
-	filteredGroups := groups_pkg.Filter(groups, c.groups)
-	if len(c.groups) > 0 && len(filteredGroups) == 0 {
-		return nil, fmt.Errorf("microsoft: user %v not in any of the required groups", userID)
+	isInGroups := false
+	if len(c.groups) > 0 {
+		gs := make(map[string]struct{})
+		for _, g := range c.groups {
+			gs[g] = struct{}{}
+		}
+
+		for _, g := range groups {
+			if _, ok := gs[g]; ok {
+				isInGroups = true
+				break
+			}
+		}
+	}
+	if len(c.groups) > 0 && !isInGroups {
+		return nil, fmt.Errorf("microsoft: user %v not in required groups", userID)
 	}
 
 	return
