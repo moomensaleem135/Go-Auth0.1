@@ -13,19 +13,17 @@ func TestPostgresTunables(t *testing.T) {
 		t.Skipf("test environment variable %q not set, skipping", testPostgresEnv)
 	}
 	baseCfg := &Postgres{
-		NetworkDB: NetworkDB{
-			Database: getenv("DEX_POSTGRES_DATABASE", "postgres"),
-			User:     getenv("DEX_POSTGRES_USER", "postgres"),
-			Password: getenv("DEX_POSTGRES_PASSWORD", "postgres"),
-			Host:     host,
-		},
-		SSL: SSL{
-			Mode: pgSSLDisable, // Postgres container doesn't support SSL.
+		Database: getenv("DEX_POSTGRES_DATABASE", "postgres"),
+		User:     getenv("DEX_POSTGRES_USER", "postgres"),
+		Password: getenv("DEX_POSTGRES_PASSWORD", "postgres"),
+		Host:     host,
+		SSL: PostgresSSL{
+			Mode: sslDisable, // Postgres container doesn't support SSL.
 		}}
 
 	t.Run("with nothing set, uses defaults", func(t *testing.T) {
 		cfg := *baseCfg
-		c, err := cfg.open(logger)
+		c, err := cfg.open(logger, cfg.createDataSourceName())
 		if err != nil {
 			t.Fatalf("error opening connector: %s", err.Error())
 		}
@@ -38,7 +36,7 @@ func TestPostgresTunables(t *testing.T) {
 	t.Run("with something set, uses that", func(t *testing.T) {
 		cfg := *baseCfg
 		cfg.MaxOpenConns = 101
-		c, err := cfg.open(logger)
+		c, err := cfg.open(logger, cfg.createDataSourceName())
 		if err != nil {
 			t.Fatalf("error opening connector: %s", err.Error())
 		}
