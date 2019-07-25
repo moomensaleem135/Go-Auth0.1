@@ -19,64 +19,40 @@ import (
 	"github.com/dexidp/dex/pkg/log"
 )
 
-// GroupNameFormat represents the format of the group identifier
-// we use type of string instead of int because it's easier to
-// marshall/unmarshall
-type GroupNameFormat string
-
-// Possible values for GroupNameFormat
-const (
-	GroupID   GroupNameFormat = "id"
-	GroupName GroupNameFormat = "name"
-)
-
 const (
 	apiURL = "https://graph.microsoft.com"
 	// Microsoft requires this scope to access user's profile
 	scopeUser = "user.read"
 	// Microsoft requires this scope to list groups the user is a member of
-	// and resolve their ids to groups names.
+	// and resolve their UUIDs to groups names.
 	scopeGroups = "directory.read.all"
 )
 
 // Config holds configuration options for microsoft logins.
 type Config struct {
-	ClientID             string          `json:"clientID"`
-	ClientSecret         string          `json:"clientSecret"`
-	RedirectURI          string          `json:"redirectURI"`
-	Tenant               string          `json:"tenant"`
-	OnlySecurityGroups   bool            `json:"onlySecurityGroups"`
-	Groups               []string        `json:"groups"`
-	GroupNameFormat      GroupNameFormat `json:"groupNameFormat"`
-	UseGroupsAsWhitelist bool            `json:"useGroupsAsWhitelist"`
+	ClientID           string   `json:"clientID"`
+	ClientSecret       string   `json:"clientSecret"`
+	RedirectURI        string   `json:"redirectURI"`
+	Tenant             string   `json:"tenant"`
+	OnlySecurityGroups bool     `json:"onlySecurityGroups"`
+	Groups             []string `json:"groups"`
 }
 
 // Open returns a strategy for logging in through Microsoft.
 func (c *Config) Open(id string, logger log.Logger) (connector.Connector, error) {
 	m := microsoftConnector{
-		redirectURI:          c.RedirectURI,
-		clientID:             c.ClientID,
-		clientSecret:         c.ClientSecret,
-		tenant:               c.Tenant,
-		onlySecurityGroups:   c.OnlySecurityGroups,
-		groups:               c.Groups,
-		groupNameFormat:      c.GroupNameFormat,
-		useGroupsAsWhitelist: c.UseGroupsAsWhitelist,
-		logger:               logger,
+		redirectURI:        c.RedirectURI,
+		clientID:           c.ClientID,
+		clientSecret:       c.ClientSecret,
+		tenant:             c.Tenant,
+		onlySecurityGroups: c.OnlySecurityGroups,
+		groups:             c.Groups,
+		logger:             logger,
 	}
 	// By default allow logins from both personal and business/school
 	// accounts.
 	if m.tenant == "" {
 		m.tenant = "common"
-	}
-
-	// By default, use group names
-	switch m.groupNameFormat {
-	case "":
-		m.groupNameFormat = GroupName
-	case GroupID, GroupName:
-	default:
-		return nil, fmt.Errorf("invalid groupNameFormat: %s", m.groupNameFormat)
 	}
 
 	return &m, nil
@@ -94,15 +70,13 @@ var (
 )
 
 type microsoftConnector struct {
-	redirectURI          string
-	clientID             string
-	clientSecret         string
-	tenant               string
-	onlySecurityGroups   bool
-	groupNameFormat      GroupNameFormat
-	groups               []string
-	useGroupsAsWhitelist bool
-	logger               log.Logger
+	redirectURI        string
+	clientID           string
+	clientSecret       string
+	tenant             string
+	onlySecurityGroups bool
+	groups             []string
+	logger             log.Logger
 }
 
 func (c *microsoftConnector) isOrgTenant() bool {
@@ -326,28 +300,24 @@ type group struct {
 	Name string `json:"displayName"`
 }
 
-func (c *microsoftConnector) getGroups(ctx context.Context, client *http.Client, userID string) ([]string, error) {
-	userGroups, err := c.getGroupIDs(ctx, client)
+func (c *microsoftConnector) getGroups(ctx context.Context, client *http.Client, userID string) (groups []string, err error) {
+	ids, err := c.getGroupIDs(ctx, client)
 	if err != nil {
-		return nil, err
+		return groups, err
 	}
 
-	if c.groupNameFormat == GroupName {
-		userGroups, err = c.getGroupNames(ctx, client, userGroups)
-		if err != nil {
-			return nil, err
-		}
+	groups, err = c.getGroupNames(ctx, client, ids)
+	if err != nil {
+		return
 	}
 
 	// ensure that the user is in at least one required group
-	filteredGroups := groups_pkg.Filter(userGroups, c.groups)
+	filteredGroups := groups_pkg.Filter(groups, c.groups)
 	if len(c.groups) > 0 && len(filteredGroups) == 0 {
 		return nil, fmt.Errorf("microsoft: user %v not in any of the required groups", userID)
-	} else if c.useGroupsAsWhitelist {
-		return filteredGroups, nil
 	}
 
-	return userGroups, nil
+	return
 }
 
 func (c *microsoftConnector) getGroupIDs(ctx context.Context, client *http.Client) (ids []string, err error) {
