@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/dexidp/dex/server"
 	"testing"
 
 	"github.com/ghodss/yaml"
@@ -69,12 +70,21 @@ storage:
     connectionTimeout: 3
 web:
   http: 127.0.0.1:5556
+
+frontend:
+  dir: ./web
+  extra:
+    foo: bar
+
 staticClients:
 - id: example-app
   redirectURIs:
   - 'http://127.0.0.1:5555/callback'
   name: 'Example App'
   secret: ZXhhbXBsZS1hcHAtc2VjcmV0
+
+oauth2:
+  alwaysShowLoginScreen: true
 
 connectors:
 - type: mockCallback
@@ -130,6 +140,12 @@ logger:
 		Web: Web{
 			HTTP: "127.0.0.1:5556",
 		},
+		Frontend: server.WebConfig{
+			Dir: "./web",
+			Extra: map[string]string{
+				"foo": "bar",
+			},
+		},
 		StaticClients: []storage.Client{
 			{
 				ID:     "example-app",
@@ -139,6 +155,9 @@ logger:
 					"http://127.0.0.1:5555/callback",
 				},
 			},
+		},
+		OAuth2: OAuth2{
+			AlwaysShowLoginScreen: true,
 		},
 		StaticConnectors: []Connector{
 			{
