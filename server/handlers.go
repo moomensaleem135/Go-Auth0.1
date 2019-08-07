@@ -249,7 +249,7 @@ func (s *Server) handleAuthorization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(connectors) == 1 && !s.alwaysShowLogin {
+	if len(connectors) == 1 {
 		for _, c := range connectors {
 			// TODO(ericchiang): Make this pass on r.URL.RawQuery and let something latter
 			// on create the auth request.
@@ -417,7 +417,7 @@ func (s *Server) handleConnectorCallback(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		if err == storage.ErrNotFound {
 			s.logger.Errorf("Invalid 'state' parameter provided: %v", err)
-			s.renderError(w, http.StatusInternalServerError, "Requested resource does not exist.")
+			s.renderError(w, http.StatusBadRequest, "Requested resource does not exist.")
 			return
 		}
 		s.logger.Errorf("Failed to get auth request: %v", err)
