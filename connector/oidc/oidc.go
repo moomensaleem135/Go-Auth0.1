@@ -40,6 +40,9 @@ type Config struct {
 	// Override the value of email_verifed to true in the returned claims
 	InsecureSkipEmailVerified bool `json:"insecureSkipEmailVerified"`
 
+	// InsecureEnableGroups enables groups claims. This is disabled by default until https://github.com/dexidp/dex/issues/1065 is resolved
+	InsecureEnableGroups bool `json:"insecureEnableGroups"`
+
 	// GetUserInfo uses the userinfo endpoint to get additional claims for
 	// the token. This is especially useful where upstreams return "thin"
 	// id tokens
@@ -132,6 +135,7 @@ func (c *Config) Open(id string, logger log.Logger) (conn connector.Connector, e
 		cancel:                    cancel,
 		hostedDomains:             c.HostedDomains,
 		insecureSkipEmailVerified: c.InsecureSkipEmailVerified,
+		insecureEnableGroups:      c.InsecureEnableGroups,
 		getUserInfo:               c.GetUserInfo,
 		userIDKey:                 c.UserIDKey,
 		userNameKey:               c.UserNameKey,
@@ -152,6 +156,7 @@ type oidcConnector struct {
 	logger                    log.Logger
 	hostedDomains             []string
 	insecureSkipEmailVerified bool
+	insecureEnableGroups      bool
 	getUserInfo               bool
 	userIDKey                 string
 	userNameKey               string
@@ -213,17 +218,6 @@ func (c *oidcConnector) HandleCallback(s connector.Scopes, r *http.Request) (ide
 		return identity, fmt.Errorf("oidc: failed to decode claims: %v", err)
 	}
 
-	// We immediately want to run getUserInfo if configured before we validate the claims
-	if c.getUserInfo {
-		userInfo, err := c.provider.UserInfo(r.Context(), oauth2.StaticTokenSource(token))
-		if err != nil {
-			return identity, fmt.Errorf("oidc: error loading userinfo: %v", err)
-		}
-		if err := userInfo.Claims(&claims); err != nil {
-			return identity, fmt.Errorf("oidc: failed to decode userinfo claims: %v", err)
-		}
-	}
-
 	userNameKey := "name"
 	if c.userNameKey != "" {
 		userNameKey = c.userNameKey
@@ -260,6 +254,16 @@ func (c *oidcConnector) HandleCallback(s connector.Scopes, r *http.Request) (ide
 		}
 	}
 
+	if c.getUserInfo {
+		userInfo, err := c.provider.UserInfo(r.Context(), oauth2.StaticTokenSource(token))
+		if err != nil {
+			return identity, fmt.Errorf("oidc: error loading userinfo: %v", err)
+		}
+		if err := userInfo.Claims(&claims); err != nil {
+			return identity, fmt.Errorf("oidc: failed to decode userinfo claims: %v", err)
+		}
+	}
+
 	identity = connector.Identity{
 		UserID:        idToken.Subject,
 		Username:      name,
@@ -273,6 +277,19 @@ func (c *oidcConnector) HandleCallback(s connector.Scopes, r *http.Request) (ide
 			return identity, fmt.Errorf("oidc: not found %v claim", c.userIDKey)
 		}
 		identity.UserID = userID
+	}
+
+	if c.insecureEnableGroups {
+		vs, ok := claims["groups"].([]interface{})
+		if ok {
+			for _, v := range vs {
+				if s, ok := v.(string); ok {
+					identity.Groups = append(identity.Groups, s)
+				} else {
+					return identity, errors.New("malformed \"groups\" claim")
+				}
+			}
+		}
 	}
 
 	return identity, nil
