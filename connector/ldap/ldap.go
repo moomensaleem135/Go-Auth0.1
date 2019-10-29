@@ -189,6 +189,7 @@ func (c *Config) OpenConnector(logger log.Logger) (interface {
 }
 
 func (c *Config) openConnector(logger log.Logger) (*ldapConnector, error) {
+
 	requiredFields := []struct {
 		name string
 		val  string
@@ -364,6 +365,7 @@ func (c *ldapConnector) identityFromEntry(user ldap.Entry) (ident connector.Iden
 }
 
 func (c *ldapConnector) userEntry(conn *ldap.Conn, username string) (user ldap.Entry, found bool, err error) {
+
 	filter := fmt.Sprintf("(%s=%s)", c.UserSearch.Username, ldap.EscapeFilter(username))
 	if c.UserSearch.Filter != "" {
 		filter = fmt.Sprintf("(&%s%s)", c.UserSearch.Filter, filter)

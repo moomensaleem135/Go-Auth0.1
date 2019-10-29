@@ -169,6 +169,7 @@ func (c *conn) UpdateAuthRequest(id string, updater func(a storage.AuthRequest) 
 		}
 		return nil
 	})
+
 }
 
 func (c *conn) GetAuthRequest(id string) (storage.AuthRequest, error) {

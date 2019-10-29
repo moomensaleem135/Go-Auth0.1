@@ -65,6 +65,7 @@ func TestUserGroupsWithoutOrgs(t *testing.T) {
 
 // tests that the email is used as their username when they have no username set
 func TestUsernameIncludedInFederatedIdentity(t *testing.T) {
+
 	s := newTestServer(map[string]interface{}{
 		"/api/v4/user": gitlabUser{Email: "some@email.com", ID: 12345678},
 		"/oauth/token": map[string]interface{}{
@@ -101,6 +102,7 @@ func TestUsernameIncludedInFederatedIdentity(t *testing.T) {
 }
 
 func TestLoginUsedAsIDWhenConfigured(t *testing.T) {
+
 	s := newTestServer(map[string]interface{}{
 		"/api/v4/user": gitlabUser{Email: "some@email.com", ID: 12345678, Name: "Joe Bloggs", Username: "joebloggs"},
 		"/oauth/token": map[string]interface{}{
@@ -128,6 +130,7 @@ func TestLoginUsedAsIDWhenConfigured(t *testing.T) {
 }
 
 func TestLoginWithTeamWhitelisted(t *testing.T) {
+
 	s := newTestServer(map[string]interface{}{
 		"/api/v4/user": gitlabUser{Email: "some@email.com", ID: 12345678, Name: "Joe Bloggs"},
 		"/oauth/token": map[string]interface{}{
@@ -155,6 +158,7 @@ func TestLoginWithTeamWhitelisted(t *testing.T) {
 }
 
 func TestLoginWithTeamNonWhitelisted(t *testing.T) {
+
 	s := newTestServer(map[string]interface{}{
 		"/api/v4/user": gitlabUser{Email: "some@email.com", ID: 12345678, Name: "Joe Bloggs", Username: "joebloggs"},
 		"/oauth/token": map[string]interface{}{

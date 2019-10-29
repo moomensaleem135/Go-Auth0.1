@@ -16,10 +16,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dexidp/dex/connector"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/square/go-jose.v2"
-
-	"github.com/dexidp/dex/connector"
 )
 
 func TestKnownBrokenAuthHeaderProvider(t *testing.T) {
