@@ -266,11 +266,10 @@ func (c *githubConnector) HandleCallback(s connector.Scopes, r *http.Request) (i
 	}
 
 	identity = connector.Identity{
-		UserID:            strconv.Itoa(user.ID),
-		Username:          username,
-		PreferredUsername: user.Login,
-		Email:             user.Email,
-		EmailVerified:     true,
+		UserID:        strconv.Itoa(user.ID),
+		Username:      username,
+		Email:         user.Email,
+		EmailVerified: true,
 	}
 	if c.useLoginAsID {
 		identity.UserID = user.Login
@@ -318,7 +317,6 @@ func (c *githubConnector) Refresh(ctx context.Context, s connector.Scopes, ident
 		username = user.Login
 	}
 	identity.Username = username
-	identity.PreferredUsername = user.Login
 	identity.Email = user.Email
 
 	// Only set identity.Groups if 'orgs', 'org', or 'groups' scope are specified.

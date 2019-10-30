@@ -137,11 +137,10 @@ type Client struct {
 
 // Claims represents the ID Token claims supported by the server.
 type Claims struct {
-	UserID            string
-	Username          string
-	PreferredUsername string
-	Email             string
-	EmailVerified     bool
+	UserID        string
+	Username      string
+	Email         string
+	EmailVerified bool
 
 	Groups []string
 }
