@@ -258,8 +258,7 @@ type idTokenClaims struct {
 
 	Groups []string `json:"groups,omitempty"`
 
-	Name              string `json:"name,omitempty"`
-	PreferredUsername string `json:"preferred_username,omitempty"`
+	Name string `json:"name,omitempty"`
 
 	FederatedIDClaims *federatedIDClaims `json:"federated_claims,omitempty"`
 }
@@ -330,7 +329,6 @@ func (s *Server) newIDToken(clientID string, claims storage.Claims, scopes []str
 			tok.Groups = claims.Groups
 		case scope == scopeProfile:
 			tok.Name = claims.Username
-			tok.PreferredUsername = claims.PreferredUsername
 		case scope == scopeFederatedID:
 			tok.FederatedIDClaims = &federatedIDClaims{
 				ConnectorID: connID,
