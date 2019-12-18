@@ -55,14 +55,14 @@ type client struct {
 }
 
 // idToName maps an arbitrary ID, such as an email or client ID to a Kubernetes object name.
-func (cli *client) idToName(s string) string {
-	return idToName(s, cli.hash)
+func (c *client) idToName(s string) string {
+	return idToName(s, c.hash)
 }
 
 // offlineTokenName maps two arbitrary IDs, to a single Kubernetes object name.
 // This is used when more than one field is used to uniquely identify the object.
-func (cli *client) offlineTokenName(userID string, connID string) string {
-	return offlineTokenName(userID, connID, cli.hash)
+func (c *client) offlineTokenName(userID string, connID string) string {
+	return offlineTokenName(userID, connID, c.hash)
 }
 
 // Kubernetes names must match the regexp '[a-z0-9]([-a-z0-9]*[a-z0-9])?'.
@@ -79,7 +79,7 @@ func offlineTokenName(userID string, connID string, h func() hash.Hash) string {
 	return strings.TrimRight(encoding.EncodeToString(hash.Sum(nil)), "=")
 }
 
-func (cli *client) urlFor(apiVersion, namespace, resource, name string) string {
+func (c *client) urlFor(apiVersion, namespace, resource, name string) string {
 	basePath := "apis/"
 	if apiVersion == "v1" {
 		basePath = "api/"
@@ -91,10 +91,10 @@ func (cli *client) urlFor(apiVersion, namespace, resource, name string) string {
 	} else {
 		p = path.Join(basePath, apiVersion, resource, name)
 	}
-	if strings.HasSuffix(cli.baseURL, "/") {
-		return cli.baseURL + p
+	if strings.HasSuffix(c.baseURL, "/") {
+		return c.baseURL + p
 	}
-	return cli.baseURL + "/" + p
+	return c.baseURL + "/" + p
 }
 
 // Define an error interface so we can get at the underlying status code if it's
@@ -156,13 +156,13 @@ func closeResp(r *http.Response) {
 	r.Body.Close()
 }
 
-func (cli *client) get(resource, name string, v interface{}) error {
-	return cli.getResource(cli.apiVersion, cli.namespace, resource, name, v)
+func (c *client) get(resource, name string, v interface{}) error {
+	return c.getResource(c.apiVersion, c.namespace, resource, name, v)
 }
 
-func (cli *client) getResource(apiVersion, namespace, resource, name string, v interface{}) error {
-	url := cli.urlFor(apiVersion, namespace, resource, name)
-	resp, err := cli.client.Get(url)
+func (c *client) getResource(apiVersion, namespace, resource, name string, v interface{}) error {
+	url := c.urlFor(apiVersion, namespace, resource, name)
+	resp, err := c.client.Get(url)
 	if err != nil {
 		return err
 	}
@@ -173,22 +173,22 @@ func (cli *client) getResource(apiVersion, namespace, resource, name string, v i
 	return json.NewDecoder(resp.Body).Decode(v)
 }
 
-func (cli *client) list(resource string, v interface{}) error {
-	return cli.get(resource, "", v)
+func (c *client) list(resource string, v interface{}) error {
+	return c.get(resource, "", v)
 }
 
-func (cli *client) post(resource string, v interface{}) error {
-	return cli.postResource(cli.apiVersion, cli.namespace, resource, v)
+func (c *client) post(resource string, v interface{}) error {
+	return c.postResource(c.apiVersion, c.namespace, resource, v)
 }
 
-func (cli *client) postResource(apiVersion, namespace, resource string, v interface{}) error {
+func (c *client) postResource(apiVersion, namespace, resource string, v interface{}) error {
 	body, err := json.Marshal(v)
 	if err != nil {
 		return fmt.Errorf("marshal object: %v", err)
 	}
 
-	url := cli.urlFor(apiVersion, namespace, resource, "")
-	resp, err := cli.client.Post(url, "application/json", bytes.NewReader(body))
+	url := c.urlFor(apiVersion, namespace, resource, "")
+	resp, err := c.client.Post(url, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -196,13 +196,13 @@ func (cli *client) postResource(apiVersion, namespace, resource string, v interf
 	return checkHTTPErr(resp, http.StatusCreated)
 }
 
-func (cli *client) delete(resource, name string) error {
-	url := cli.urlFor(cli.apiVersion, cli.namespace, resource, name)
+func (c *client) delete(resource, name string) error {
+	url := c.urlFor(c.apiVersion, c.namespace, resource, name)
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
 		return fmt.Errorf("create delete request: %v", err)
 	}
-	resp, err := cli.client.Do(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("delete request: %v", err)
 	}
@@ -210,7 +210,7 @@ func (cli *client) delete(resource, name string) error {
 	return checkHTTPErr(resp, http.StatusOK)
 }
 
-func (cli *client) deleteAll(resource string) error {
+func (c *client) deleteAll(resource string) error {
 	var list struct {
 		k8sapi.TypeMeta `json:",inline"`
 		k8sapi.ListMeta `json:"metadata,omitempty"`
@@ -219,24 +219,24 @@ func (cli *client) deleteAll(resource string) error {
 			k8sapi.ObjectMeta `json:"metadata,omitempty"`
 		} `json:"items"`
 	}
-	if err := cli.list(resource, &list); err != nil {
+	if err := c.list(resource, &list); err != nil {
 		return err
 	}
 	for _, item := range list.Items {
-		if err := cli.delete(resource, item.Name); err != nil {
+		if err := c.delete(resource, item.Name); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (cli *client) put(resource, name string, v interface{}) error {
+func (c *client) put(resource, name string, v interface{}) error {
 	body, err := json.Marshal(v)
 	if err != nil {
 		return fmt.Errorf("marshal object: %v", err)
 	}
 
-	url := cli.urlFor(cli.apiVersion, cli.namespace, resource, name)
+	url := c.urlFor(c.apiVersion, c.namespace, resource, name)
 	req, err := http.NewRequest("PUT", url, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create patch request: %v", err)
@@ -244,7 +244,7 @@ func (cli *client) put(resource, name string, v interface{}) error {
 
 	req.Header.Set("Content-Length", strconv.Itoa(len(body)))
 
-	resp, err := cli.client.Do(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("patch request: %v", err)
 	}

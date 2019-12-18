@@ -24,6 +24,7 @@ func TestHandleHealth(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Errorf("expected 200 got %d", rr.Code)
 	}
+
 }
 
 type badStorage struct {

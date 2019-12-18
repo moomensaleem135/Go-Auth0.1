@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/dexidp/dex/server"
 	"testing"
 
 	"github.com/ghodss/yaml"
@@ -8,7 +9,6 @@ import (
 
 	"github.com/dexidp/dex/connector/mock"
 	"github.com/dexidp/dex/connector/oidc"
-	"github.com/dexidp/dex/server"
 	"github.com/dexidp/dex/storage"
 	"github.com/dexidp/dex/storage/sql"
 )
@@ -211,4 +211,5 @@ logger:
 	if diff := pretty.Compare(c, want); diff != "" {
 		t.Errorf("got!=want: %s", diff)
 	}
+
 }

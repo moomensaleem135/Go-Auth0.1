@@ -45,8 +45,8 @@ func (s *Server) newHealthChecker(ctx context.Context) http.Handler {
 	return h
 }
 
-// healthChecker periodically performs health checks on server dependencies.
-// Currently, it only checks that the storage layer is available.
+// healthChecker periodically performs health checks on server dependenices.
+// Currently, it only checks that the storage layer is avialable.
 type healthChecker struct {
 	s *Server
 
@@ -922,6 +922,7 @@ func (s *Server) handleAuthCode(w http.ResponseWriter, r *http.Request, client s
 				deleteToken = true
 				return
 			}
+
 		}
 	}
 	s.writeAccessToken(w, idToken, accessToken, refreshToken, expiry)

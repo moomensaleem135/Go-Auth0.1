@@ -126,6 +126,7 @@ func TestUserGroupsWithTeamNameAndSlugFieldConfig(t *testing.T) {
 
 // tests that the users login is used as their username when they have no username set
 func TestUsernameIncludedInFederatedIdentity(t *testing.T) {
+
 	s := newTestServer(map[string]testResponse{
 		"/user": {data: user{Login: "some-login", ID: 12345678}},
 		"/user/emails": {data: []userEmail{{
@@ -167,6 +168,7 @@ func TestUsernameIncludedInFederatedIdentity(t *testing.T) {
 }
 
 func TestLoginUsedAsIDWhenConfigured(t *testing.T) {
+
 	s := newTestServer(map[string]testResponse{
 		"/user": {data: user{Login: "some-login", ID: 12345678, Name: "Joe Bloggs"}},
 		"/user/emails": {data: []userEmail{{

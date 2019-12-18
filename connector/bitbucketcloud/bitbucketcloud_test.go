@@ -14,6 +14,7 @@ import (
 )
 
 func TestUserGroups(t *testing.T) {
+
 	teamsResponse := userTeamsResponse{
 		pagedResponse: pagedResponse{
 			Size:    3,
@@ -45,6 +46,7 @@ func TestUserGroups(t *testing.T) {
 }
 
 func TestUserWithoutTeams(t *testing.T) {
+
 	s := newTestServer(map[string]interface{}{
 		"/teams?role=member": userTeamsResponse{},
 	})
@@ -59,6 +61,7 @@ func TestUserWithoutTeams(t *testing.T) {
 }
 
 func TestUsernameIncludedInFederatedIdentity(t *testing.T) {
+
 	s := newTestServer(map[string]interface{}{
 		"/user": user{Username: "some-login"},
 		"/user/emails": userEmailResponse{
