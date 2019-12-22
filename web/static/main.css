@@ -68,12 +68,12 @@ body {
   background-size: contain;
 }
 
-.dex-btn-icon--bitbucket-cloud {
+.dex-btn-icon--bitbucket {
   background-color: #205081;
   background-image: url(../static/img/bitbucket-icon.svg);
 }
 
-.dex-btn-icon--ldap {
+.dex-btn-icon--ldap, .dex-btn-icon--tectonic-ldap {
   background-color: #84B6EF;
   background-image: url(../static/img/ldap-icon.svg);
 }
