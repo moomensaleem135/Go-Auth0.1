@@ -123,12 +123,11 @@ connectors:
       # Optional filter to apply when searching the directory.
       filter: "(objectClass=group)"
 
-      # Following list contains field pairs that are used to match a user to a group. It adds an additional
+      # Following two fields are used to match a user to a group. It adds an additional
       # requirement to the filter that an attribute in the group must match the user's
       # attribute value.
-      userMatchers:
-      - userAttr: uid
-        groupAttr: member
+      userAttr: uid
+      groupAttr: member
 
       # Represents group name.
       nameAttr: name
@@ -216,9 +215,8 @@ groupSearch:
 
   # The group search needs to match the "uid" attribute on
   # the user with the "memberUid" attribute on the group.
-  userMatchers:
-  - userAttr: uid
-    groupAttr: memberUid
+  userAttr: uid
+  groupAttr: memberUid
 
   # Unique name of the group.
   nameAttr: cn
@@ -244,27 +242,8 @@ groupSearch:
   # Optional filter to apply when searching the directory.
   filter: "(objectClass=group)"
 
-  userMatchers:
-  - userAttr: DN # Use "DN" here not "uid"
-    groupAttr: member
-
-  nameAttr: name
-```
-
-There are cases when different types (objectClass) of groups use different attributes to keep a list of members. Below is an example of group query for such case:
-
-```yaml
-groupSearch:
-  baseDN: cn=groups,cn=compat,dc=example,dc=com
-  # Optional filter to search for different group types
-  filter: "(|(objectClass=posixGroup)(objectClass=group))"
-
-  # Use multiple user matchers so Dex will know which attribute names should be used to search for group members
-  userMatchers:
-  - userAttr: uid
-    groupAttr: memberUid
-  - userAttr: DN
-    groupAttr: member
+  userAttr: DN # Use "DN" here not "uid"
+  groupAttr: member
 
   nameAttr: name
 ```
@@ -296,9 +275,8 @@ connectors:
       # Would translate to the query "(&(objectClass=group)(member=<user uid>))".
       baseDN: cn=groups,dc=freeipa,dc=example,dc=com
       filter: "(objectClass=group)"
-      userMatchers:
-      - userAttr: uid
-        groupAttr: member
+      userAttr: uid
+      groupAttr: member
       nameAttr: name
 ```
 
@@ -337,9 +315,8 @@ connectors:
     groupSearch:
       baseDN: cn=Users,dc=example,dc=com
       filter: "(objectClass=group)"
-      userMatchers:
-      - userAttr: DN
-        groupAttr: member
+      userAttr: DN
+      groupAttr: member
       nameAttr: cn
 ```
 
