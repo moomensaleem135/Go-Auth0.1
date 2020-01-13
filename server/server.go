@@ -76,8 +76,6 @@ type Config struct {
 	RotateKeysAfter      time.Duration // Defaults to 6 hours.
 	IDTokensValidFor     time.Duration // Defaults to 24 hours
 	AuthRequestsValidFor time.Duration // Defaults to 24 hours
-	// If set, the server will use this connector to handle password grants
-	PasswordConnector string
 
 	GCFrequency time.Duration // Defaults to 5 minutes
 
@@ -146,9 +144,6 @@ type Server struct {
 
 	// If enabled, show the connector selection screen even if there's only one
 	alwaysShowLogin bool
-
-	// Used for password grant
-	passwordConnector string
 
 	supportedResponseTypes map[string]bool
 
@@ -221,7 +216,6 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 		alwaysShowLogin:        c.AlwaysShowLoginScreen,
 		now:                    now,
 		templates:              tmpls,
-		passwordConnector:      c.PasswordConnector,
 		logger:                 c.Logger,
 	}
 
