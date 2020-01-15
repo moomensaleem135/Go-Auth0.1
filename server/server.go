@@ -77,9 +77,6 @@ type Config struct {
 	// If enabled, the connectors selection page will always be shown even if there's only one
 	AlwaysShowLoginScreen bool
 
-	// If enabled, the client secret is expected to be encrypted
-	HashClientSecret bool
-
 	RotateKeysAfter        time.Duration // Defaults to 6 hours.
 	IDTokensValidFor       time.Duration // Defaults to 24 hours
 	AuthRequestsValidFor   time.Duration // Defaults to 24 hours
@@ -111,7 +108,7 @@ type WebConfig struct {
 	//   * templates - HTML templates controlled by dex.
 	//   * themes/(theme) - Static static served at "( issuer URL )/theme".
 	//
-	Dir string
+	Dir http.FileSystem
 
 	// Defaults to "( issuer URL )/theme/logo.png"
 	LogoURL string
@@ -154,9 +151,6 @@ type Server struct {
 	// If enabled, show the connector selection screen even if there's only one
 	alwaysShowLogin bool
 
-	// If enabled, the client secret is expected to be encrypted
-	hashClientSecret bool
-
 	// Used for password grant
 	passwordConnector string
 
@@ -195,24 +189,6 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 	if c.Storage == nil {
 		return nil, errors.New("server: storage cannot be nil")
 	}
-
-	if c.HashClientSecret {
-		clients, err := c.Storage.ListClients()
-		if err != nil {
-			return nil, fmt.Errorf("server: failed to list clients")
-		}
-
-		for _, client := range clients {
-			if client.Secret == "" {
-				return nil, fmt.Errorf("server: client secret can't be empty")
-			}
-
-			if err = checkCost([]byte(client.Secret)); err != nil {
-				return nil, fmt.Errorf("server: failed to check cost of client secret: %v", err)
-			}
-		}
-	}
-
 	if len(c.SupportedResponseTypes) == 0 {
 		c.SupportedResponseTypes = []string{responseTypeCode}
 	}
@@ -227,18 +203,9 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 		supported[respType] = true
 	}
 
-	web := webConfig{
-		dir:       c.Web.Dir,
-		logoURL:   c.Web.LogoURL,
-		issuerURL: c.Issuer,
-		issuer:    c.Web.Issuer,
-		theme:     c.Web.Theme,
-		extra:     c.Web.Extra,
-	}
-
-	static, theme, tmpls, err := loadWebConfig(web)
+	tmpls, err := loadTemplates(c.Web, issuerURL.Path)
 	if err != nil {
-		return nil, fmt.Errorf("server: failed to load web static: %v", err)
+		return nil, fmt.Errorf("server: failed to load templates: %v", err)
 	}
 
 	now := c.Now
@@ -256,7 +223,6 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 		deviceRequestsValidFor: value(c.DeviceRequestsValidFor, 5*time.Minute),
 		skipApproval:           c.SkipApprovalScreen,
 		alwaysShowLogin:        c.AlwaysShowLoginScreen,
-		hashClientSecret:       c.HashClientSecret,
 		now:                    now,
 		templates:              tmpls,
 		passwordConnector:      c.PasswordConnector,
@@ -368,8 +334,8 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 		}
 		fmt.Fprintf(w, "Health check passed")
 	}))
-	handlePrefix("/static", static)
-	handlePrefix("/theme", theme)
+	handlePrefix("/", http.FileServer(c.Web.Dir))
+
 	s.mux = r
 
 	s.startKeyRotation(ctx, rotationStrategy, now)
