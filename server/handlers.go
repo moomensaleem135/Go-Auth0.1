@@ -1344,14 +1344,10 @@ func (s *Server) handlePasswordGrant(w http.ResponseWriter, r *http.Request, cli
 			if oldTokenRef, ok := session.Refresh[tokenRef.ClientID]; ok {
 				// Delete old refresh token from storage.
 				if err := s.storage.DeleteRefresh(oldTokenRef.ID); err != nil {
-					if err == storage.ErrNotFound {
-						s.logger.Warnf("database inconsistent, refresh token missing: %v", oldTokenRef.ID)
-					} else {
-						s.logger.Errorf("failed to delete refresh token: %v", err)
-						s.tokenErrHelper(w, errServerError, "", http.StatusInternalServerError)
-						deleteToken = true
-						return
-					}
+					s.logger.Errorf("failed to delete refresh token: %v", err)
+					s.tokenErrHelper(w, errServerError, "", http.StatusInternalServerError)
+					deleteToken = true
+					return
 				}
 			}
 
