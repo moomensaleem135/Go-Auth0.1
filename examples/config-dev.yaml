@@ -70,7 +70,7 @@ connectors:
 - type: mockCallback
   id: mock
   name: Example
-# - type: google
+# - type: oidc
 #   id: google
 #   name: Google
 #   config:
