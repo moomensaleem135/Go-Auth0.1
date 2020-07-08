@@ -11,7 +11,7 @@ connectors:
   name: OpenLDAP
   id: ldap
   config:
-    host: localhost:389
+    host: localhost:10389
 
     # No TLS for this setup.
     insecureNoSSL: true
