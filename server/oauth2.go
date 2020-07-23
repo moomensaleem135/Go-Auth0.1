@@ -115,10 +115,6 @@ const (
 )
 
 const (
-	deviceCallbackURI = "/device/callback"
-)
-
-const (
 	redirectURIOOB = "urn:ietf:wg:oauth:2.0:oob"
 )
 
@@ -126,20 +122,12 @@ const (
 	grantTypeAuthorizationCode = "authorization_code"
 	grantTypeRefreshToken      = "refresh_token"
 	grantTypePassword          = "password"
-	grantTypeDeviceCode        = "urn:ietf:params:oauth:grant-type:device_code"
 )
 
 const (
 	responseTypeCode    = "code"     // "Regular" flow
 	responseTypeToken   = "token"    // Implicit flow for frontend apps.
 	responseTypeIDToken = "id_token" // ID Token in url fragment
-)
-
-const (
-	deviceTokenPending  = "authorization_pending"
-	deviceTokenComplete = "complete"
-	deviceTokenSlowDown = "slow_down"
-	deviceTokenExpired  = "expired_token"
 )
 
 func parseScopes(scopes []string) connector.Scopes {
@@ -437,9 +425,6 @@ func (s *Server) parseAuthorizationRequest(r *http.Request) (*storage.AuthReques
 		description := fmt.Sprintf("Unregistered redirect_uri (%q).", redirectURI)
 		return nil, &authErr{"", "", errInvalidRequest, description}
 	}
-	if redirectURI == deviceCallbackURI && client.Public {
-		redirectURI = s.issuerURL.Path + deviceCallbackURI
-	}
 
 	// From here on out, we want to redirect back to the client with an error.
 	newErr := func(typ, format string, a ...interface{}) *authErr {
@@ -581,7 +566,7 @@ func validateRedirectURI(client storage.Client, redirectURI string) bool {
 		return false
 	}
 
-	if redirectURI == redirectURIOOB || redirectURI == deviceCallbackURI {
+	if redirectURI == redirectURIOOB {
 		return true
 	}
 
