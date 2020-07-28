@@ -188,13 +188,13 @@ func parseScope(s string) (int, bool) {
 func (c *ldapConnector) userMatchers() []UserMatcher {
 	if len(c.GroupSearch.UserMatchers) > 0 && c.GroupSearch.UserMatchers[0].UserAttr != "" {
 		return c.GroupSearch.UserMatchers[:]
-	}
-	
-	return []UserMatcher{
-		{
-			UserAttr:  c.GroupSearch.UserAttr,
-			GroupAttr: c.GroupSearch.GroupAttr,
-		},
+	} else {
+		return []UserMatcher{
+			{
+				UserAttr:  c.GroupSearch.UserAttr,
+				GroupAttr: c.GroupSearch.GroupAttr,
+			},
+		}
 	}
 }
 
