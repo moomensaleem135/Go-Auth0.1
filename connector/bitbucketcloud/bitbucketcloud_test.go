@@ -21,20 +21,17 @@ func TestUserGroups(t *testing.T) {
 			PageLen: 10,
 		},
 		Values: []team{
-			{Team: teamName{Name: "team-1"}},
-			{Team: teamName{Name: "team-2"}},
-			{Team: teamName{Name: "team-3"}},
+			{Name: "team-1"},
+			{Name: "team-2"},
+			{Name: "team-3"},
 		},
 	}
 
 	s := newTestServer(map[string]interface{}{
-		"/user/permissions/teams": teamsResponse,
-		"/groups/team-1":          []group{{Slug: "administrators"}, {Slug: "members"}},
-		"/groups/team-2":          []group{{Slug: "everyone"}},
-		"/groups/team-3":          []group{},
+		"/teams?role=member": teamsResponse,
 	})
 
-	connector := bitbucketConnector{apiURL: s.URL, legacyAPIURL: s.URL}
+	connector := bitbucketConnector{apiURL: s.URL}
 	groups, err := connector.userTeams(context.Background(), newClient())
 
 	expectNil(t, err)
@@ -44,25 +41,12 @@ func TestUserGroups(t *testing.T) {
 		"team-3",
 	})
 
-	connector.includeTeamGroups = true
-	groups, err = connector.userTeams(context.Background(), newClient())
-
-	expectNil(t, err)
-	expectEquals(t, groups, []string{
-		"team-1",
-		"team-2",
-		"team-3",
-		"team-1/administrators",
-		"team-1/members",
-		"team-2/everyone",
-	})
-
 	s.Close()
 }
 
 func TestUserWithoutTeams(t *testing.T) {
 	s := newTestServer(map[string]interface{}{
-		"/user/permissions/teams": userTeamsResponse{},
+		"/teams?role=member": userTeamsResponse{},
 	})
 
 	connector := bitbucketConnector{apiURL: s.URL}

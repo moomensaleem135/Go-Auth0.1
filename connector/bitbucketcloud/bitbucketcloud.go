@@ -21,8 +21,7 @@ import (
 
 const (
 	apiURL = "https://api.bitbucket.org/2.0"
-	// Switch to API v2.0 when the Atlassian platform services are fully available in Bitbucket
-	legacyAPIURL = "https://api.bitbucket.org/1.0"
+
 	// Bitbucket requires this scope to access '/user' API endpoints.
 	scopeAccount = "account"
 	// Bitbucket requires this scope to access '/user/emails' API endpoints.
@@ -34,24 +33,21 @@ const (
 
 // Config holds configuration options for Bitbucket logins.
 type Config struct {
-	ClientID          string   `json:"clientID"`
-	ClientSecret      string   `json:"clientSecret"`
-	RedirectURI       string   `json:"redirectURI"`
-	Teams             []string `json:"teams"`
-	IncludeTeamGroups bool     `json:"includeTeamGroups,omitempty"`
+	ClientID     string   `json:"clientID"`
+	ClientSecret string   `json:"clientSecret"`
+	RedirectURI  string   `json:"redirectURI"`
+	Teams        []string `json:"teams"`
 }
 
 // Open returns a strategy for logging in through Bitbucket.
-func (c *Config) Open(_ string, logger log.Logger) (connector.Connector, error) {
+func (c *Config) Open(id string, logger log.Logger) (connector.Connector, error) {
 	b := bitbucketConnector{
-		redirectURI:       c.RedirectURI,
-		teams:             c.Teams,
-		clientID:          c.ClientID,
-		clientSecret:      c.ClientSecret,
-		includeTeamGroups: c.IncludeTeamGroups,
-		apiURL:            apiURL,
-		legacyAPIURL:      legacyAPIURL,
-		logger:            logger,
+		redirectURI:  c.RedirectURI,
+		teams:        c.Teams,
+		clientID:     c.ClientID,
+		clientSecret: c.ClientSecret,
+		apiURL:       apiURL,
+		logger:       logger,
 	}
 
 	return &b, nil
@@ -75,13 +71,10 @@ type bitbucketConnector struct {
 	clientSecret string
 	logger       log.Logger
 	apiURL       string
-	legacyAPIURL string
 
 	// the following are used only for tests
 	hostName   string
 	httpClient *http.Client
-
-	includeTeamGroups bool
 }
 
 // groupsRequired returns whether dex requires Bitbucket's 'team' scope.
@@ -369,12 +362,8 @@ func (b *bitbucketConnector) getGroups(ctx context.Context, client *http.Client,
 	return nil, nil
 }
 
-type teamName struct {
-	Name string `json:"username"` // The "username" from Bitbucket Cloud is actually the team name here
-}
-
 type team struct {
-	Team teamName `json:"team"`
+	Name string `json:"username"` // The "username" from Bitbucket Cloud is actually the team name here
 }
 
 type userTeamsResponse struct {
@@ -384,18 +373,18 @@ type userTeamsResponse struct {
 
 func (b *bitbucketConnector) userTeams(ctx context.Context, client *http.Client) ([]string, error) {
 	var teams []string
-	apiURL := b.apiURL + "/user/permissions/teams"
+	apiURL := b.apiURL + "/teams?role=member"
 
 	for {
-		// https://developer.atlassian.com/bitbucket/api/2/reference/resource/user/permissions/teams
+		// https://developer.atlassian.com/bitbucket/api/2/reference/resource/teams
 		var response userTeamsResponse
 
 		if err := get(ctx, client, apiURL, &response); err != nil {
 			return nil, fmt.Errorf("bitbucket: get user teams: %v", err)
 		}
 
-		for _, value := range response.Values {
-			teams = append(teams, value.Team.Name)
+		for _, team := range response.Values {
+			teams = append(teams, team.Name)
 		}
 
 		if response.Next == nil {
@@ -403,37 +392,7 @@ func (b *bitbucketConnector) userTeams(ctx context.Context, client *http.Client)
 		}
 	}
 
-	if b.includeTeamGroups {
-		for _, team := range teams {
-			teamGroups, err := b.userTeamGroups(ctx, client, team)
-			if err != nil {
-				return nil, fmt.Errorf("bitbucket: %v", err)
-			}
-			teams = append(teams, teamGroups...)
-		}
-	}
-
 	return teams, nil
-}
-
-type group struct {
-	Slug string `json:"slug"`
-}
-
-func (b *bitbucketConnector) userTeamGroups(ctx context.Context, client *http.Client, teamName string) ([]string, error) {
-	var teamGroups []string
-	apiURL := b.legacyAPIURL + "/groups/" + teamName
-
-	var response []group
-	if err := get(ctx, client, apiURL, &response); err != nil {
-		return nil, fmt.Errorf("get user team %q groups: %v", teamName, err)
-	}
-
-	for _, group := range response {
-		teamGroups = append(teamGroups, teamName+"/"+group.Slug)
-	}
-
-	return teamGroups, nil
 }
 
 // get creates a "GET `apiURL`" request with context, sends the request using
