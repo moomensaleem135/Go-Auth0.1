@@ -84,7 +84,7 @@ func getAdminToken(t *testing.T, adminName, adminPass string) (token, id string)
 	}
 	defer resp.Body.Close()
 
-	tokenResp := new(tokenResponse)
+	var tokenResp = new(tokenResponse)
 	err = json.Unmarshal(data, &tokenResp)
 	if err != nil {
 		t.Fatal(err)
@@ -128,7 +128,7 @@ func createUser(t *testing.T, token, userName, userEmail, userPass string) strin
 	}
 	defer resp.Body.Close()
 
-	userResp := new(userResponse)
+	var userResp = new(userResponse)
 	err = json.Unmarshal(data, &userResp)
 	if err != nil {
 		t.Fatal(err)
@@ -189,7 +189,7 @@ func createGroup(t *testing.T, token, description, name string) string {
 	}
 	defer resp.Body.Close()
 
-	groupResp := new(groupResponse)
+	var groupResp = new(groupResponse)
 	err = json.Unmarshal(data, &groupResp)
 	if err != nil {
 		t.Fatal(err)
@@ -219,10 +219,8 @@ func addUserToGroup(t *testing.T, token, groupID, userID string) error {
 
 func TestIncorrectCredentialsLogin(t *testing.T) {
 	setupVariables(t)
-	c := conn{
-		Host: keystoneURL, Domain: testDomain,
-		AdminUsername: adminUser, AdminPassword: adminPass,
-	}
+	c := conn{Host: keystoneURL, Domain: testDomain,
+		AdminUsername: adminUser, AdminPassword: adminPass}
 	s := connector.Scopes{OfflineAccess: true, Groups: true}
 	_, validPW, err := c.Login(context.Background(), s, adminUser, invalidPass)
 
@@ -256,7 +254,7 @@ func TestValidUserLogin(t *testing.T) {
 		verifiedEmail bool
 	}
 
-	tests := []struct {
+	var tests = []struct {
 		name     string
 		input    tUser
 		expected expect
@@ -296,10 +294,8 @@ func TestValidUserLogin(t *testing.T) {
 			userID := createUser(t, token, tt.input.username, tt.input.email, tt.input.password)
 			defer deleteResource(t, token, userID, usersURL)
 
-			c := conn{
-				Host: keystoneURL, Domain: tt.input.domain,
-				AdminUsername: adminUser, AdminPassword: adminPass,
-			}
+			c := conn{Host: keystoneURL, Domain: tt.input.domain,
+				AdminUsername: adminUser, AdminPassword: adminPass}
 			s := connector.Scopes{OfflineAccess: true, Groups: true}
 			identity, validPW, err := c.Login(context.Background(), s, tt.input.username, tt.input.password)
 			if err != nil {
@@ -333,10 +329,8 @@ func TestUseRefreshToken(t *testing.T) {
 	addUserToGroup(t, token, groupID, adminID)
 	defer deleteResource(t, token, groupID, groupsURL)
 
-	c := conn{
-		Host: keystoneURL, Domain: testDomain,
-		AdminUsername: adminUser, AdminPassword: adminPass,
-	}
+	c := conn{Host: keystoneURL, Domain: testDomain,
+		AdminUsername: adminUser, AdminPassword: adminPass}
 	s := connector.Scopes{OfflineAccess: true, Groups: true}
 
 	identityLogin, _, err := c.Login(context.Background(), s, adminUser, adminPass)
@@ -358,10 +352,8 @@ func TestUseRefreshTokenUserDeleted(t *testing.T) {
 	token, _ := getAdminToken(t, adminUser, adminPass)
 	userID := createUser(t, token, testUser, testEmail, testPass)
 
-	c := conn{
-		Host: keystoneURL, Domain: testDomain,
-		AdminUsername: adminUser, AdminPassword: adminPass,
-	}
+	c := conn{Host: keystoneURL, Domain: testDomain,
+		AdminUsername: adminUser, AdminPassword: adminPass}
 	s := connector.Scopes{OfflineAccess: true, Groups: true}
 
 	identityLogin, _, err := c.Login(context.Background(), s, testUser, testPass)
@@ -388,10 +380,8 @@ func TestUseRefreshTokenGroupsChanged(t *testing.T) {
 	userID := createUser(t, token, testUser, testEmail, testPass)
 	defer deleteResource(t, token, userID, usersURL)
 
-	c := conn{
-		Host: keystoneURL, Domain: testDomain,
-		AdminUsername: adminUser, AdminPassword: adminPass,
-	}
+	c := conn{Host: keystoneURL, Domain: testDomain,
+		AdminUsername: adminUser, AdminPassword: adminPass}
 	s := connector.Scopes{OfflineAccess: true, Groups: true}
 
 	identityLogin, _, err := c.Login(context.Background(), s, testUser, testPass)
@@ -424,10 +414,8 @@ func TestNoGroupsInScope(t *testing.T) {
 	userID := createUser(t, token, testUser, testEmail, testPass)
 	defer deleteResource(t, token, userID, usersURL)
 
-	c := conn{
-		Host: keystoneURL, Domain: testDomain,
-		AdminUsername: adminUser, AdminPassword: adminPass,
-	}
+	c := conn{Host: keystoneURL, Domain: testDomain,
+		AdminUsername: adminUser, AdminPassword: adminPass}
 	s := connector.Scopes{OfflineAccess: true, Groups: false}
 
 	groupID := createGroup(t, token, "Test group", testGroup)

@@ -82,8 +82,7 @@ type migration struct {
 // All SQL flavors share migration strategies.
 var migrations = []migration{
 	{
-		stmts: []string{
-			`
+		stmts: []string{`
 			create table client (
 				id text not null primary key,
 				secret text not null,
@@ -171,8 +170,7 @@ var migrations = []migration{
 		},
 	},
 	{
-		stmts: []string{
-			`
+		stmts: []string{`
 			alter table refresh_token
 				add column token text not null default '';`,
 			`
@@ -184,8 +182,7 @@ var migrations = []migration{
 		},
 	},
 	{
-		stmts: []string{
-			`
+		stmts: []string{`
 			create table offline_session (
 				user_id text not null,
 				conn_id text not null,
@@ -195,8 +192,7 @@ var migrations = []migration{
 		},
 	},
 	{
-		stmts: []string{
-			`
+		stmts: []string{`
 			create table connector (
 				id text not null primary key,
 				type text not null,
@@ -207,8 +203,7 @@ var migrations = []migration{
 		},
 	},
 	{
-		stmts: []string{
-			`
+		stmts: []string{`
 			alter table auth_code
 				add column claims_preferred_username text not null default '';`,
 			`
@@ -220,16 +215,14 @@ var migrations = []migration{
 		},
 	},
 	{
-		stmts: []string{
-			`
+		stmts: []string{`
 			alter table offline_session
 				add column connector_data bytea;
 			`,
 		},
 	},
 	{
-		stmts: []string{
-			`
+		stmts: []string{`
 			alter table auth_request
 				modify column state varchar(4096);
 			`,
@@ -237,8 +230,7 @@ var migrations = []migration{
 		flavor: &flavorMySQL,
 	},
 	{
-		stmts: []string{
-			`
+		stmts: []string{`
 			create table device_request (
 				user_code text not null primary key,
 				device_code text not null,
@@ -256,22 +248,6 @@ var migrations = []migration{
 				last_request timestamptz not null,
                 poll_interval integer not null
 			);`,
-		},
-	},
-	{
-		stmts: []string{
-			`
-			alter table auth_request
-				add column code_challenge text not null default '';`,
-			`
-			alter table auth_request
-				add column code_challenge_method text not null default '';`,
-			`
-			alter table auth_code
-				add column code_challenge text not null default '';`,
-			`
-			alter table auth_code
-				add column code_challenge_method text not null default '';`,
 		},
 	},
 }

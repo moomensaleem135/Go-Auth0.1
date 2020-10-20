@@ -7,11 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kylelemons/godebug/pretty"
-	"golang.org/x/crypto/bcrypt"
 	jose "gopkg.in/square/go-jose.v2"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/dexidp/dex/storage"
+
+	"github.com/kylelemons/godebug/pretty"
 )
 
 // ensure that values being tested on never expire.
@@ -79,11 +81,6 @@ func mustBeErrAlreadyExists(t *testing.T, kind string, err error) {
 }
 
 func testAuthRequestCRUD(t *testing.T, s storage.Storage) {
-	codeChallenge := storage.PKCE{
-		CodeChallenge:       "code_challenge_test",
-		CodeChallengeMethod: "plain",
-	}
-
 	a1 := storage.AuthRequest{
 		ID:                  storage.NewID(),
 		ClientID:            "client1",
@@ -104,7 +101,6 @@ func testAuthRequestCRUD(t *testing.T, s storage.Storage) {
 			EmailVerified: true,
 			Groups:        []string{"a", "b"},
 		},
-		PKCE: codeChallenge,
 	}
 
 	identity := storage.Claims{Email: "foobar"}
@@ -157,10 +153,6 @@ func testAuthRequestCRUD(t *testing.T, s storage.Storage) {
 	}
 	if !reflect.DeepEqual(got.Claims, identity) {
 		t.Fatalf("update failed, wanted identity=%#v got %#v", identity, got.Claims)
-	}
-
-	if !reflect.DeepEqual(got.PKCE, codeChallenge) {
-		t.Fatalf("storage does not support PKCE, wanted challenge=%#v got %#v", codeChallenge, got.PKCE)
 	}
 
 	if err := s.DeleteAuthRequest(a1.ID); err != nil {

@@ -169,12 +169,6 @@ type Claims struct {
 	Groups []string
 }
 
-// Data needed for PKCE (RFC 7636)
-type PKCE struct {
-	CodeChallenge       string
-	CodeChallengeMethod string
-}
-
 // AuthRequest represents a OAuth2 client authorization request. It holds the state
 // of a single auth flow up to the point that the user authorizes the client.
 type AuthRequest struct {
@@ -212,9 +206,6 @@ type AuthRequest struct {
 	// Set when the user authenticates.
 	ConnectorID   string
 	ConnectorData []byte
-
-	// PKCE CodeChallenge and CodeChallengeMethod
-	PKCE PKCE
 }
 
 // AuthCode represents a code which can be exchanged for an OAuth2 token response.
@@ -250,9 +241,6 @@ type AuthCode struct {
 	Claims        Claims
 
 	Expiry time.Time
-
-	// PKCE CodeChallenge and CodeChallengeMethod
-	PKCE PKCE
 }
 
 // RefreshToken is an OAuth2 refresh token which allows a client to request new

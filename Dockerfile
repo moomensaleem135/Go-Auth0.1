@@ -1,4 +1,4 @@
-FROM golang:1.15.6-alpine3.12
+FROM golang:1.15-alpine
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -11,12 +11,6 @@ ENV GOOS=${TARGETOS} \
   GOARM=${TARGETVARIANT}
 
 RUN apk add --no-cache --update alpine-sdk
-
-ARG GOPROXY
-
-COPY go.mod go.sum ./
-COPY api/v2/go.mod api/v2/go.sum ./api/v2/
-RUN go mod download
 
 COPY . .
 
@@ -36,10 +30,6 @@ RUN apk add --no-cache --update ca-certificates openssl
 USER 1001:1001
 
 COPY --from=0 /go/bin/dex /usr/local/bin/dex
-
-# Copy module dependencies for CVE scanning / dependency analysis.
-COPY go.mod go.sum                 /opt/dex/dependencies/
-COPY api/v2/go.mod api/v2/go.sum   /opt/dex/dependencies/api/v2/
 
 # Import frontend assets and set the correct CWD directory so the assets
 # are in the default path.

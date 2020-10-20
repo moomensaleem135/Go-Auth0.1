@@ -34,8 +34,7 @@ func TestPostgresTunables(t *testing.T) {
 		},
 		SSL: SSL{
 			Mode: pgSSLDisable, // Postgres container doesn't support SSL.
-		},
-	}
+		}}
 
 	t.Run("with nothing set, uses defaults", func(t *testing.T) {
 		cfg := *baseCfg
