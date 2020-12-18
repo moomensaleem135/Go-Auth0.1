@@ -855,7 +855,7 @@ func (s *Server) handleAuthCode(w http.ResponseWriter, r *http.Request, client s
 	s.writeAccessToken(w, tokenResponse)
 }
 
-func (s *Server) exchangeAuthCode(w http.ResponseWriter, authCode storage.AuthCode, client storage.Client) (*accessTokenResponse, error) {
+func (s *Server) exchangeAuthCode(w http.ResponseWriter, authCode storage.AuthCode, client storage.Client) (*accessTokenReponse, error) {
 	accessToken, err := s.newAccessToken(client.ID, authCode.Claims, authCode.Scopes, authCode.Nonce, authCode.ConnectorID)
 	if err != nil {
 		s.logger.Errorf("failed to create new access token: %v", err)
@@ -1449,7 +1449,7 @@ func (s *Server) handlePasswordGrant(w http.ResponseWriter, r *http.Request, cli
 	s.writeAccessToken(w, resp)
 }
 
-type accessTokenResponse struct {
+type accessTokenReponse struct {
 	AccessToken  string `json:"access_token"`
 	TokenType    string `json:"token_type"`
 	ExpiresIn    int    `json:"expires_in"`
@@ -1457,8 +1457,8 @@ type accessTokenResponse struct {
 	IDToken      string `json:"id_token"`
 }
 
-func (s *Server) toAccessTokenResponse(idToken, accessToken, refreshToken string, expiry time.Time) *accessTokenResponse {
-	return &accessTokenResponse{
+func (s *Server) toAccessTokenResponse(idToken, accessToken, refreshToken string, expiry time.Time) *accessTokenReponse {
+	return &accessTokenReponse{
 		accessToken,
 		"bearer",
 		int(expiry.Sub(s.now()).Seconds()),
@@ -1467,7 +1467,7 @@ func (s *Server) toAccessTokenResponse(idToken, accessToken, refreshToken string
 	}
 }
 
-func (s *Server) writeAccessToken(w http.ResponseWriter, resp *accessTokenResponse) {
+func (s *Server) writeAccessToken(w http.ResponseWriter, resp *accessTokenReponse) {
 	data, err := json.Marshal(resp)
 	if err != nil {
 		s.logger.Errorf("failed to marshal access token response: %v", err)
