@@ -413,6 +413,13 @@ func (s *Server) parseAuthorizationRequest(r *http.Request) (*storage.AuthReques
 	scopes := strings.Fields(q.Get("scope"))
 	responseTypes := strings.Fields(q.Get("response_type"))
 
+	codeChallenge := q.Get("code_challenge")
+	codeChallengeMethod := q.Get("code_challenge_method")
+
+	if codeChallengeMethod == "" {
+		codeChallengeMethod = CodeChallengeMethodPlain
+	}
+
 	client, err := s.storage.GetClient(clientID)
 	if err != nil {
 		if err == storage.ErrNotFound {
@@ -444,6 +451,11 @@ func (s *Server) parseAuthorizationRequest(r *http.Request) (*storage.AuthReques
 	// From here on out, we want to redirect back to the client with an error.
 	newErr := func(typ, format string, a ...interface{}) *authErr {
 		return &authErr{state, redirectURI, typ, fmt.Sprintf(format, a...)}
+	}
+
+	if codeChallengeMethod != CodeChallengeMethodS256 && codeChallengeMethod != CodeChallengeMethodPlain {
+		description := fmt.Sprintf("Unsupported PKCE challenge method (%q).", codeChallengeMethod)
+		return nil, newErr(errInvalidRequest, description)
 	}
 
 	var (
@@ -541,6 +553,10 @@ func (s *Server) parseAuthorizationRequest(r *http.Request) (*storage.AuthReques
 		RedirectURI:         redirectURI,
 		ResponseTypes:       responseTypes,
 		ConnectorID:         connectorID,
+		PKCE: storage.PKCE{
+			CodeChallenge:       codeChallenge,
+			CodeChallengeMethod: codeChallengeMethod,
+		},
 	}, nil
 }
 
@@ -572,12 +588,16 @@ func (s *Server) validateCrossClientTrust(clientID, peerID string) (trusted bool
 }
 
 func validateRedirectURI(client storage.Client, redirectURI string) bool {
-	if !client.Public {
-		for _, uri := range client.RedirectURIs {
-			if redirectURI == uri {
-				return true
-			}
+	// Allow named RedirectURIs for both public and non-public clients.
+	// This is required make PKCE-enabled web apps work, when configured as public clients.
+	for _, uri := range client.RedirectURIs {
+		if redirectURI == uri {
+			return true
 		}
+	}
+	// For non-public clients or when RedirectURIs is set, we allow only explicitly named RedirectURIs.
+	// Otherwise, we check below for special URIs used for desktop or mobile apps.
+	if !client.Public || len(client.RedirectURIs) > 0 {
 		return false
 	}
 
