@@ -3,6 +3,7 @@
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/dexidp/dex/CI?style=flat-square)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dexidp/dex?style=flat-square)](https://goreportcard.com/report/github.com/dexidp/dex)
 [![go.dev reference](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/mod/github.com/dexidp/dex)
+[![Gitpod ready-to-code](https://img.shields.io/badge/Gitpod-ready--to--code-blue?logo=gitpod&style=flat-square)](https://gitpod.io/#https://github.com/dexidp/dex)
 
 ![logo](Documentation/logos/dex-horizontal-color.png)
 
@@ -67,7 +68,7 @@ Dex implements the following connectors:
 | ---- | ----------------------- | --------------------- | --------------------------------- | ------ | ----- |
 | [LDAP](https://dexidp.io/docs/connectors/ldap/) | yes | yes | yes | stable | |
 | [GitHub](https://dexidp.io/docs/connectors/github/) | yes | yes | yes | stable | |
-| [SAML 2.0](https://dexidp.io/docs/connectors/saml/) | no | yes | no | stable |
+| [SAML 2.0](https://dexidp.io/docs/connectors/saml/) | no | yes | no | stable | WARNING: Unmaintained and likely vulnerable to auth bypasses ([#1884](https://github.com/dexidp/dex/discussions/1884)) |
 | [GitLab](https://dexidp.io/docs/connectors/gitlab/) | yes | yes | yes | beta | |
 | [OpenID Connect](https://dexidp.io/docs/connectors/oidc/) | yes | yes | yes | beta | Includes Salesforce, Azure, etc. |
 | [Google](https://dexidp.io/docs/connectors/google/) | yes | yes | yes | alpha | |
@@ -102,7 +103,11 @@ All changes or deprecations of connector features will be announced in the [rele
 
 ## Reporting a security vulnerability
 
-Due to their public nature, GitHub and mailing lists are NOT appropriate places for reporting vulnerabilities. Please refer to CoreOS's [security disclosure][disclosure] process when reporting issues that may be security related.
+Due to their public nature, GitHub and mailing lists are NOT appropriate places
+for reporting vulnerabilities.
+
+Please email the [maintainers list][maintainers-list] to report issues that may
+be security-related.
 
 ## Getting help
 
@@ -112,8 +117,8 @@ on the Kubernetes Slack, or join the [dex-dev][dex-dev] mailing list.
 
 [openid-connect]: https://openid.net/connect/
 [standard-claims]: https://openid.net/specs/openid-connect-core-1_0.html#StandardClaims
-[scopes]: Documentation/custom-scopes-claims-clients.md#scopes
-[using-dex]: Documentation/using-dex.md
+[scopes]: https://dexidp.io/docs/custom-scopes-claims-clients/#scopes
+[using-dex]: https://dexidp.io/docs/using-dex/
 [jwt-io]: https://jwt.io/
 [kubernetes]: http://kubernetes.io/docs/admin/authentication/#openid-connect-tokens
 [aws-sts]: https://docs.aws.amazon.com/STS/latest/APIReference/Welcome.html
@@ -125,4 +130,4 @@ on the Kubernetes Slack, or join the [dex-dev][dex-dev] mailing list.
 [issues]: https://github.com/dexidp/dex/issues
 [dex-dev]: https://groups.google.com/forum/#!forum/dex-dev
 [slack]: slack://channel?team=T09NY5SBT&id=C011URMR41W
-[disclosure]: https://coreos.com/security/disclosure/
+[maintainers-list]: mailto:cncf-dex-maintainers@lists.cncf.io
