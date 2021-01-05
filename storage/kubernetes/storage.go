@@ -405,7 +405,7 @@ func (cli *client) DeleteAuthCode(code string) error {
 }
 
 func (cli *client) DeleteClient(id string) error {
-	// Check for hash collision.
+	// Check for hash collition.
 	c, err := cli.getClient(id)
 	if err != nil {
 		return err
