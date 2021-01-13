@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -52,7 +51,6 @@ type Config struct {
 	Groups               []string        `json:"groups"`
 	GroupNameFormat      GroupNameFormat `json:"groupNameFormat"`
 	UseGroupsAsWhitelist bool            `json:"useGroupsAsWhitelist"`
-	EmailToLowercase     bool            `json:"emailToLowercase"`
 }
 
 // Open returns a strategy for logging in through Microsoft.
@@ -69,7 +67,6 @@ func (c *Config) Open(id string, logger log.Logger) (connector.Connector, error)
 		groupNameFormat:      c.GroupNameFormat,
 		useGroupsAsWhitelist: c.UseGroupsAsWhitelist,
 		logger:               logger,
-		emailToLowercase:     c.EmailToLowercase,
 	}
 	// By default allow logins from both personal and business/school
 	// accounts.
@@ -112,7 +109,6 @@ type microsoftConnector struct {
 	groups               []string
 	useGroupsAsWhitelist bool
 	logger               log.Logger
-	emailToLowercase     bool
 }
 
 func (c *microsoftConnector) isOrgTenant() bool {
@@ -173,10 +169,6 @@ func (c *microsoftConnector) HandleCallback(s connector.Scopes, r *http.Request)
 	user, err := c.user(ctx, client)
 	if err != nil {
 		return identity, fmt.Errorf("microsoft: get user: %v", err)
-	}
-
-	if c.emailToLowercase {
-		user.Email = strings.ToLower(user.Email)
 	}
 
 	identity = connector.Identity{
