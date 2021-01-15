@@ -128,7 +128,10 @@ func (c *crowdConnector) Login(ctx context.Context, s connector.Scopes, username
 		return connector.Identity{}, false, err
 	}
 
-	ident = c.identityFromCrowdUser(user)
+	if ident, err = c.identityFromCrowdUser(user); err != nil {
+		return connector.Identity{}, false, err
+	}
+
 	if s.Groups {
 		userGroups, err := c.getGroups(ctx, client, s.Groups, ident.Username)
 		if err != nil {
@@ -162,7 +165,10 @@ func (c *crowdConnector) Refresh(ctx context.Context, s connector.Scopes, ident 
 		return ident, fmt.Errorf("crowd: get user %q: %v", data.Username, err)
 	}
 
-	newIdent := c.identityFromCrowdUser(user)
+	newIdent, err := c.identityFromCrowdUser(user)
+	if err != nil {
+		return ident, err
+	}
 	newIdent.ConnectorData = ident.ConnectorData
 
 	// If user exists, authenticate it to prolong sso session.
@@ -360,7 +366,7 @@ func (c *crowdConnector) groups(ctx context.Context, client *http.Client, userna
 }
 
 // identityFromCrowdUser converts crowdUser to Identity
-func (c *crowdConnector) identityFromCrowdUser(user crowdUser) connector.Identity {
+func (c *crowdConnector) identityFromCrowdUser(user crowdUser) (connector.Identity, error) {
 	identity := connector.Identity{
 		Username:      user.Name,
 		UserID:        user.Key,
@@ -381,7 +387,7 @@ func (c *crowdConnector) identityFromCrowdUser(user crowdUser) connector.Identit
 		}
 	}
 
-	return identity
+	return identity, nil
 }
 
 // getGroups retrieves a list of user's groups and filters it
