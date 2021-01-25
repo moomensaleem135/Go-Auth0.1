@@ -71,6 +71,9 @@ func TestUserLoginFlow(t *testing.T) {
 	expectEquals(t, user.Name, "testuser")
 	expectEquals(t, user.Email, "testuser@example.com")
 
+	_, err = c.identityFromCrowdUser(user)
+	expectNil(t, err)
+
 	err = c.authenticateUser(context.Background(), newClient(), "testuser")
 	expectNil(t, err)
 
@@ -116,7 +119,8 @@ func TestIdentityFromCrowdUser(t *testing.T) {
 	expectEquals(t, user.Email, "testuser@example.com")
 
 	// Test unconfigured behaviour
-	i := c.identityFromCrowdUser(user)
+	i, err := c.identityFromCrowdUser(user)
+	expectNil(t, err)
 	expectEquals(t, i.UserID, "12345")
 	expectEquals(t, i.Username, "testuser")
 	expectEquals(t, i.Email, "testuser@example.com")
@@ -127,19 +131,23 @@ func TestIdentityFromCrowdUser(t *testing.T) {
 	expectEquals(t, i.PreferredUsername, "")
 
 	c.Config.PreferredUsernameField = "key"
-	i = c.identityFromCrowdUser(user)
+	i, err = c.identityFromCrowdUser(user)
+	expectNil(t, err)
 	expectEquals(t, i.PreferredUsername, "12345")
 
 	c.Config.PreferredUsernameField = "name"
-	i = c.identityFromCrowdUser(user)
+	i, err = c.identityFromCrowdUser(user)
+	expectNil(t, err)
 	expectEquals(t, i.PreferredUsername, "testuser")
 
 	c.Config.PreferredUsernameField = "email"
-	i = c.identityFromCrowdUser(user)
+	i, err = c.identityFromCrowdUser(user)
+	expectNil(t, err)
 	expectEquals(t, i.PreferredUsername, "testuser@example.com")
 
 	c.Config.PreferredUsernameField = "invalidstring"
-	i = c.identityFromCrowdUser(user)
+	i, err = c.identityFromCrowdUser(user)
+	expectNil(t, err)
 	expectEquals(t, i.PreferredUsername, "")
 }
 

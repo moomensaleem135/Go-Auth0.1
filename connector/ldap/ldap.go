@@ -609,7 +609,7 @@ func (c *ldapConnector) groups(ctx context.Context, user ldap.Entry) ([]string, 
 		}
 	}
 
-	groupNames := make([]string, 0, len(groups))
+	var groupNames []string
 	for _, group := range groups {
 		name := getAttr(*group, c.GroupSearch.NameAttr)
 		if name == "" {

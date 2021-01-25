@@ -77,7 +77,11 @@ func (s *Server) handleDeviceCode(w http.ResponseWriter, r *http.Request) {
 		deviceCode := storage.NewDeviceCode()
 
 		// make user code
-		userCode := storage.NewUserCode()
+		userCode, err := storage.NewUserCode()
+		if err != nil {
+			s.logger.Errorf("Error generating user code: %v", err)
+			s.tokenErrHelper(w, errInvalidRequest, "", http.StatusInternalServerError)
+		}
 
 		// Generate the expire time
 		expireTime := time.Now().Add(s.deviceRequestsValidFor)
