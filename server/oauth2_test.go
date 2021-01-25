@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"gopkg.in/square/go-jose.v2"
 
 	"github.com/dexidp/dex/storage"
@@ -27,8 +26,7 @@ func TestParseAuthorizationRequest(t *testing.T) {
 
 		queryParams map[string]string
 
-		wantErr    bool
-		exactError *authErr
+		wantErr bool
 	}{
 		{
 			name: "normal request",
@@ -271,29 +269,6 @@ func TestParseAuthorizationRequest(t *testing.T) {
 			},
 			wantErr: true,
 		},
-		{
-			name: "No response type",
-			clients: []storage.Client{
-				{
-					ID:           "bar",
-					RedirectURIs: []string{"https://example.com/bar"},
-				},
-			},
-			supportedResponseTypes: []string{"code"},
-			queryParams: map[string]string{
-				"client_id":             "bar",
-				"redirect_uri":          "https://example.com/bar",
-				"code_challenge":        "123",
-				"code_challenge_method": "plain",
-				"scope":                 "openid email profile",
-			},
-			wantErr: true,
-			exactError: &authErr{
-				RedirectURI: "https://example.com/bar",
-				Type:        "invalid_request",
-				Description: "No response_type provided",
-			},
-		},
 	}
 
 	for _, tc := range tests {
@@ -319,15 +294,12 @@ func TestParseAuthorizationRequest(t *testing.T) {
 			} else {
 				req = httptest.NewRequest("GET", httpServer.URL+"/auth?"+params.Encode(), nil)
 			}
-
 			_, err := server.parseAuthorizationRequest(req)
-			if tc.wantErr {
-				require.Error(t, err)
-				if tc.exactError != nil {
-					require.Equal(t, tc.exactError, err)
-				}
-			} else {
-				require.NoError(t, err)
+			if err != nil && !tc.wantErr {
+				t.Errorf("%s: %v", tc.name, err)
+			}
+			if err == nil && tc.wantErr {
+				t.Errorf("%s: expected error", tc.name)
 			}
 		}()
 	}
