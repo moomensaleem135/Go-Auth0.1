@@ -184,10 +184,10 @@ func (s *Server) discoveryHandler() (http.HandlerFunc, error) {
 		IDTokenAlgs:       []string{string(jose.RS256)},
 		CodeChallengeAlgs: []string{CodeChallengeMethodS256, CodeChallengeMethodPlain},
 		Scopes:            []string{"openid", "email", "groups", "profile", "offline_access"},
-		AuthMethods:       []string{"client_secret_basic"},
+		AuthMethods:       []string{"client_secret_basic", "client_secret_post"},
 		Claims: []string{
-			"aud", "email", "email_verified", "exp",
-			"iat", "iss", "locale", "name", "sub",
+			"iss", "sub", "aud", "iat", "exp", "email", "email_verified",
+			"locale", "name", "preferred_username", "at_hash",
 		},
 	}
 
@@ -805,18 +805,13 @@ func (s *Server) handleAuthCode(w http.ResponseWriter, r *http.Request, client s
 	code := r.PostFormValue("code")
 	redirectURI := r.PostFormValue("redirect_uri")
 
-	if code == "" {
-		s.tokenErrHelper(w, errInvalidRequest, `Required param: code.`, http.StatusBadRequest)
-		return
-	}
-
 	authCode, err := s.storage.GetAuthCode(code)
 	if err != nil || s.now().After(authCode.Expiry) || authCode.ClientID != client.ID {
 		if err != storage.ErrNotFound {
 			s.logger.Errorf("failed to get auth code: %v", err)
 			s.tokenErrHelper(w, errServerError, "", http.StatusInternalServerError)
 		} else {
-			s.tokenErrHelper(w, errInvalidGrant, "Invalid or expired code parameter.", http.StatusBadRequest)
+			s.tokenErrHelper(w, errInvalidRequest, "Invalid or expired code parameter.", http.StatusBadRequest)
 		}
 		return
 	}
@@ -1481,6 +1476,10 @@ func (s *Server) writeAccessToken(w http.ResponseWriter, resp *accessTokenRespon
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+
+	// Token response must include cache headers https://tools.ietf.org/html/rfc6749#section-5.1
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
 	w.Write(data)
 }
 
