@@ -14,6 +14,9 @@ import (
 	"syscall"
 	"time"
 
+	gosundheit "github.com/AppsFlyer/go-sundheit"
+	"github.com/AppsFlyer/go-sundheit/checks"
+	gosundheithttp "github.com/AppsFlyer/go-sundheit/http"
 	"github.com/ghodss/yaml"
 	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/oklog/run"
@@ -317,18 +320,6 @@ func runServe(options serveOptions) error {
 		logger.Infof("config device requests valid for: %v", deviceRequests)
 		serverConfig.DeviceRequestsValidFor = deviceRequests
 	}
-	refreshTokenPolicy, err := server.NewRefreshTokenPolicy(
-		logger,
-		c.Expiry.RefreshTokens.DisableRotation,
-		c.Expiry.RefreshTokens.ValidIfNotUsedFor,
-		c.Expiry.RefreshTokens.AbsoluteLifetime,
-		c.Expiry.RefreshTokens.ReuseInterval,
-	)
-	if err != nil {
-		return fmt.Errorf("invalid refresh token expiration policy config: %v", err)
-	}
-
-	serverConfig.RefreshTokenPolicy = refreshTokenPolicy
 	serv, err := server.NewServer(context.Background(), serverConfig)
 	if err != nil {
 		return fmt.Errorf("failed to initialize server: %v", err)
@@ -336,6 +327,28 @@ func runServe(options serveOptions) error {
 
 	telemetryServ := http.NewServeMux()
 	telemetryServ.Handle("/metrics", promhttp.HandlerFor(prometheusRegistry, promhttp.HandlerOpts{}))
+
+	// Configure health checker
+	healthChecker := gosundheit.New()
+	{
+		handler := gosundheithttp.HandleHealthJSON(healthChecker)
+		telemetryServ.Handle("/healthz", handler)
+
+		// Kubernetes style health checks
+		telemetryServ.HandleFunc("/healthz/live", func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte("ok"))
+		})
+		telemetryServ.Handle("/healthz/ready", handler)
+	}
+
+	healthChecker.RegisterCheck(&gosundheit.Config{
+		Check: &checks.CustomCheck{
+			CheckName: "storage",
+			CheckFunc: storage.NewCustomHealthCheckFunc(serverConfig.Storage, serverConfig.Now),
+		},
+		ExecutionPeriod:  15 * time.Second,
+		InitiallyPassing: true,
+	})
 
 	var gr run.Group
 	if c.Telemetry.HTTP != "" {
