@@ -32,16 +32,13 @@ linters:
         - misspell
         - nakedret
         - nolintlint
-        - prealloc
         - rowserrcheck
-        - sqlclosecheck
         - staticcheck
         - structcheck
         - stylecheck
         - tparallel
         - typecheck
         - unconvert
-        - unparam
         - unused
         - varcheck
         - whitespace
@@ -54,6 +51,8 @@ linters:
         # - godot
         # - nlreturn
         # - noctx
+        # - prealloc
+        # - sqlclosecheck
         # - wrapcheck
 
         # TODO: fix linter errors before enabling (from original config)
@@ -64,6 +63,7 @@ linters:
         # - gosec
         # - lll
         # - scopelint
+        # - unparam
 
         # unused
         # - depguard
