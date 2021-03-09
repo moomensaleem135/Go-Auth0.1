@@ -15,7 +15,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	gosundheit "github.com/AppsFlyer/go-sundheit"
 	"github.com/felixge/httpsnoop"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -81,6 +80,10 @@ type Config struct {
 	IDTokensValidFor       time.Duration // Defaults to 24 hours
 	AuthRequestsValidFor   time.Duration // Defaults to 24 hours
 	DeviceRequestsValidFor time.Duration // Defaults to 5 minutes
+
+	// Refresh token expiration settings
+	RefreshTokenPolicy *RefreshTokenPolicy
+
 	// If set, the server will use this connector to handle password grants
 	PasswordConnector string
 
@@ -94,8 +97,6 @@ type Config struct {
 	Logger log.Logger
 
 	PrometheusRegistry *prometheus.Registry
-
-	HealthChecker gosundheit.Health
 }
 
 // WebConfig holds the server's frontend templates and asset configuration.
@@ -161,6 +162,8 @@ type Server struct {
 	idTokensValidFor       time.Duration
 	authRequestsValidFor   time.Duration
 	deviceRequestsValidFor time.Duration
+
+	refreshTokenPolicy *RefreshTokenPolicy
 
 	logger log.Logger
 }
@@ -230,6 +233,7 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 		idTokensValidFor:       value(c.IDTokensValidFor, 24*time.Hour),
 		authRequestsValidFor:   value(c.AuthRequestsValidFor, 24*time.Hour),
 		deviceRequestsValidFor: value(c.DeviceRequestsValidFor, 5*time.Minute),
+		refreshTokenPolicy:     c.RefreshTokenPolicy,
 		skipApproval:           c.SkipApprovalScreen,
 		alwaysShowLogin:        c.AlwaysShowLoginScreen,
 		now:                    now,
@@ -336,13 +340,7 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 	// "authproxy" connector.
 	handleFunc("/callback/{connector}", s.handleConnectorCallback)
 	handleFunc("/approval", s.handleApproval)
-	handle("/healthz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !c.HealthChecker.IsHealthy() {
-			s.renderError(r, w, http.StatusInternalServerError, "Health check failed.")
-			return
-		}
-		fmt.Fprintf(w, "Health check passed")
-	}))
+	handle("/healthz", s.newHealthChecker(ctx))
 	handlePrefix("/static", static)
 	handlePrefix("/theme", theme)
 	s.mux = r
