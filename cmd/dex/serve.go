@@ -14,6 +14,9 @@ import (
 	"syscall"
 	"time"
 
+	gosundheit "github.com/AppsFlyer/go-sundheit"
+	"github.com/AppsFlyer/go-sundheit/checks"
+	gosundheithttp "github.com/AppsFlyer/go-sundheit/http"
 	"github.com/ghodss/yaml"
 	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/oklog/run"
@@ -68,27 +71,6 @@ func commandServe() *cobra.Command {
 	flags.StringVar(&options.grpcAddr, "grpc-addr", "", "gRPC API address")
 
 	return cmd
-}
-
-func listenAndShutdownGracefully(logger log.Logger, gr *run.Group, srv *http.Server, name string) error {
-	l, err := net.Listen("tcp", srv.Addr)
-	if err != nil {
-		return fmt.Errorf("listening (%s) on %s: %v", name, srv.Addr, err)
-	}
-
-	gr.Add(func() error {
-		logger.Infof("listening (%s) on %s", name, srv.Addr)
-		return srv.Serve(l)
-	}, func(err error) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
-
-		logger.Debugf("starting graceful shutdown (%s)", name)
-		if err := srv.Shutdown(ctx); err != nil {
-			logger.Errorf("graceful shutdown (%s): %v", name, err)
-		}
-	})
-	return nil
 }
 
 func runServe(options serveOptions) error {
@@ -190,6 +172,8 @@ func runServe(options serveOptions) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize storage: %v", err)
 	}
+	defer s.Close()
+
 	logger.Infof("config storage: %s", c.Storage.Type)
 
 	if len(c.StaticClients) > 0 {
@@ -272,6 +256,8 @@ func runServe(options serveOptions) error {
 	// explicitly convert to UTC.
 	now := func() time.Time { return time.Now().UTC() }
 
+	healthChecker := gosundheit.New()
+
 	serverConfig := server.Config{
 		SupportedResponseTypes: c.OAuth2.ResponseTypes,
 		SkipApprovalScreen:     c.OAuth2.SkipApprovalScreen,
@@ -284,6 +270,7 @@ func runServe(options serveOptions) error {
 		Logger:                 logger,
 		Now:                    now,
 		PrometheusRegistry:     prometheusRegistry,
+		HealthChecker:          healthChecker,
 	}
 	if c.Expiry.SigningKeys != "" {
 		signingKeys, err := time.ParseDuration(c.Expiry.SigningKeys)
@@ -317,48 +304,107 @@ func runServe(options serveOptions) error {
 		logger.Infof("config device requests valid for: %v", deviceRequests)
 		serverConfig.DeviceRequestsValidFor = deviceRequests
 	}
-	refreshTokenPolicy, err := server.NewRefreshTokenPolicy(
-		logger,
-		c.Expiry.RefreshTokens.DisableRotation,
-		c.Expiry.RefreshTokens.ValidIfNotUsedFor,
-		c.Expiry.RefreshTokens.AbsoluteLifetime,
-		c.Expiry.RefreshTokens.ReuseInterval,
-	)
-	if err != nil {
-		return fmt.Errorf("invalid refresh token expiration policy config: %v", err)
-	}
-
-	serverConfig.RefreshTokenPolicy = refreshTokenPolicy
 	serv, err := server.NewServer(context.Background(), serverConfig)
 	if err != nil {
 		return fmt.Errorf("failed to initialize server: %v", err)
 	}
 
-	telemetryServ := http.NewServeMux()
-	telemetryServ.Handle("/metrics", promhttp.HandlerFor(prometheusRegistry, promhttp.HandlerOpts{}))
+	telemetryRouter := http.NewServeMux()
+	telemetryRouter.Handle("/metrics", promhttp.HandlerFor(prometheusRegistry, promhttp.HandlerOpts{}))
 
-	var gr run.Group
+	// Configure health checker
+	{
+		handler := gosundheithttp.HandleHealthJSON(healthChecker)
+		telemetryRouter.Handle("/healthz", handler)
+
+		// Kubernetes style health checks
+		telemetryRouter.HandleFunc("/healthz/live", func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte("ok"))
+		})
+		telemetryRouter.Handle("/healthz/ready", handler)
+	}
+
+	healthChecker.RegisterCheck(&gosundheit.Config{
+		Check: &checks.CustomCheck{
+			CheckName: "storage",
+			CheckFunc: storage.NewCustomHealthCheckFunc(serverConfig.Storage, serverConfig.Now),
+		},
+		ExecutionPeriod:  15 * time.Second,
+		InitiallyPassing: true,
+	})
+
+	var group run.Group
+
+	// Set up telemetry server
 	if c.Telemetry.HTTP != "" {
-		telemetrySrv := &http.Server{Addr: c.Telemetry.HTTP, Handler: telemetryServ}
+		const name = "telemetry"
 
-		defer telemetrySrv.Close()
-		if err := listenAndShutdownGracefully(logger, &gr, telemetrySrv, "http/telemetry"); err != nil {
-			return err
+		logger.Infof("listening (%s) on %s", name, c.Telemetry.HTTP)
+
+		l, err := net.Listen("tcp", c.Telemetry.HTTP)
+		if err != nil {
+			return fmt.Errorf("listening (%s) on %s: %v", name, c.Telemetry.HTTP, err)
 		}
+
+		server := &http.Server{
+			Handler: telemetryRouter,
+		}
+		defer server.Close()
+
+		group.Add(func() error {
+			return server.Serve(l)
+		}, func(err error) {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+
+			logger.Debugf("starting graceful shutdown (%s)", name)
+			if err := server.Shutdown(ctx); err != nil {
+				logger.Errorf("graceful shutdown (%s): %v", name, err)
+			}
+		})
 	}
 
+	// Set up http server
 	if c.Web.HTTP != "" {
-		httpSrv := &http.Server{Addr: c.Web.HTTP, Handler: serv}
+		const name = "http"
 
-		defer httpSrv.Close()
-		if err := listenAndShutdownGracefully(logger, &gr, httpSrv, "http"); err != nil {
-			return err
+		logger.Infof("listening (%s) on %s", name, c.Web.HTTP)
+
+		l, err := net.Listen("tcp", c.Web.HTTP)
+		if err != nil {
+			return fmt.Errorf("listening (%s) on %s: %v", name, c.Web.HTTP, err)
 		}
+
+		server := &http.Server{
+			Handler: serv,
+		}
+		defer server.Close()
+
+		group.Add(func() error {
+			return server.Serve(l)
+		}, func(err error) {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+
+			logger.Debugf("starting graceful shutdown (%s)", name)
+			if err := server.Shutdown(ctx); err != nil {
+				logger.Errorf("graceful shutdown (%s): %v", name, err)
+			}
+		})
 	}
 
+	// Set up https server
 	if c.Web.HTTPS != "" {
-		httpsSrv := &http.Server{
-			Addr:    c.Web.HTTPS,
+		const name = "https"
+
+		logger.Infof("listening (%s) on %s", name, c.Web.HTTPS)
+
+		l, err := net.Listen("tcp", c.Web.HTTPS)
+		if err != nil {
+			return fmt.Errorf("listening (%s) on %s: %v", name, c.Web.HTTPS, err)
+		}
+
+		server := &http.Server{
 			Handler: serv,
 			TLSConfig: &tls.Config{
 				CipherSuites:             allowedTLSCiphers,
@@ -366,14 +412,25 @@ func runServe(options serveOptions) error {
 				MinVersion:               tls.VersionTLS12,
 			},
 		}
+		defer server.Close()
 
-		defer httpsSrv.Close()
-		if err := listenAndShutdownGracefully(logger, &gr, httpsSrv, "https"); err != nil {
-			return err
-		}
+		group.Add(func() error {
+			return server.ServeTLS(l, c.Web.TLSCert, c.Web.TLSKey)
+		}, func(err error) {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+
+			logger.Debugf("starting graceful shutdown (%s)", name)
+			if err := server.Shutdown(ctx); err != nil {
+				logger.Errorf("graceful shutdown (%s): %v", name, err)
+			}
+		})
 	}
 
+	// Set up grpc server
 	if c.GRPC.Addr != "" {
+		logger.Infof("listening (grpc) on %s", c.GRPC.Addr)
+
 		grpcListener, err := net.Listen("tcp", c.GRPC.Addr)
 		if err != nil {
 			return fmt.Errorf("listening (grcp) on %s: %w", c.GRPC.Addr, err)
@@ -388,8 +445,7 @@ func runServe(options serveOptions) error {
 			reflection.Register(grpcSrv)
 		}
 
-		gr.Add(func() error {
-			logger.Infof("listening (grpc) on %s", c.GRPC.Addr)
+		group.Add(func() error {
 			return grpcSrv.Serve(grpcListener)
 		}, func(err error) {
 			logger.Debugf("starting graceful shutdown (grpc)")
@@ -397,8 +453,8 @@ func runServe(options serveOptions) error {
 		})
 	}
 
-	gr.Add(run.SignalHandler(context.Background(), os.Interrupt, syscall.SIGTERM))
-	if err := gr.Run(); err != nil {
+	group.Add(run.SignalHandler(context.Background(), os.Interrupt, syscall.SIGTERM))
+	if err := group.Run(); err != nil {
 		if _, ok := err.(run.SignalError); !ok {
 			return fmt.Errorf("run groups: %w", err)
 		}
