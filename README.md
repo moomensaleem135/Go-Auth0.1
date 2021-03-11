@@ -77,9 +77,10 @@ Dex implements the following connectors:
 | [Microsoft](https://dexidp.io/docs/connectors/microsoft/) | yes | yes | no | beta | |
 | [AuthProxy](https://dexidp.io/docs/connectors/authproxy/) | no | no | no | alpha | Authentication proxies such as Apache2 mod_auth, etc. |
 | [Bitbucket Cloud](https://dexidp.io/docs/connectors/bitbucketcloud/) | yes | yes | no | alpha | |
-| [OpenShift](https://dexidp.io/docs/connectors/openshift/) | no | yes | no | alpha | |
+| [OpenShift](https://dexidp.io/docs/connectors/openshift/) | no | yes | no | stable | |
 | [Atlassian Crowd](https://dexidp.io/docs/connectors/atlassiancrowd/) | yes | yes | yes * | beta | preferred_username claim must be configured through config |
 | [Gitea](https://dexidp.io/docs/connectors/gitea/) | yes | no | yes | alpha | |
+| [OpenStack Keystone](https://dexidp.io/docs/connectors/keystone/) | yes | yes | no | alpha | |
 
 Stable, beta, and alpha are defined as:
 
