@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"path/filepath"
 	"sort"
@@ -44,6 +45,7 @@ type templates struct {
 }
 
 type webConfig struct {
+	dir       string
 	webFS     fs.FS
 	logoURL   string
 	issuer    string
@@ -74,6 +76,11 @@ func loadWebConfig(c webConfig) (http.Handler, http.Handler, *templates, error) 
 	}
 	if c.issuer == "" {
 		c.issuer = "dex"
+	}
+	if c.dir != "" {
+		c.webFS = os.DirFS(c.dir)
+	} else if c.webFS == nil {
+		c.webFS = os.DirFS("./web")
 	}
 	if c.logoURL == "" {
 		c.logoURL = "theme/logo.png"
