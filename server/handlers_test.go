@@ -7,12 +7,9 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
-	gosundheit "github.com/AppsFlyer/go-sundheit"
-	"github.com/AppsFlyer/go-sundheit/checks"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/require"
@@ -36,23 +33,20 @@ func TestHandleHealth(t *testing.T) {
 	}
 }
 
+type badStorage struct {
+	storage.Storage
+}
+
+func (b *badStorage) CreateAuthRequest(r storage.AuthRequest) error {
+	return errors.New("storage unavailable")
+}
+
 func TestHandleHealthFailure(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	httpServer, server := newTestServer(ctx, t, func(c *Config) {
-		c.HealthChecker = gosundheit.New()
-
-		c.HealthChecker.RegisterCheck(&gosundheit.Config{
-			Check: &checks.CustomCheck{
-				CheckName: "fail",
-				CheckFunc: func() (details interface{}, err error) {
-					return nil, errors.New("error")
-				},
-			},
-			InitiallyPassing: false,
-			ExecutionPeriod:  1 * time.Second,
-		})
+		c.Storage = &badStorage{c.Storage}
 	})
 	defer httpServer.Close()
 
@@ -136,7 +130,7 @@ func TestHandleInvalidSAMLCallbacks(t *testing.T) {
 func TestConnectorLoginDoesNotAllowToChangeConnectorForAuthRequest(t *testing.T) {
 	memStorage := memory.New(logger)
 
-	templates, err := loadTemplates(webConfig{webFS: os.DirFS("../web")}, "templates")
+	templates, err := loadTemplates(webConfig{}, "../web/templates")
 	if err != nil {
 		t.Fatal("failed to load templates")
 	}

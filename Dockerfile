@@ -1,4 +1,4 @@
-FROM golang:1.16.3-alpine3.13 AS builder
+FROM golang:1.15.8-alpine3.13 AS builder
 
 WORKDIR /usr/local/src/dex
 
@@ -20,7 +20,7 @@ COPY . .
 
 RUN make release-binary
 
-FROM alpine:3.13.4 AS gomplate
+FROM alpine:3.13.1 AS gomplate
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -29,11 +29,11 @@ ARG TARGETVARIANT
 ENV GOMPLATE_VERSION=v3.9.0
 
 RUN wget -O /usr/local/bin/gomplate \
-  "https://github.com/hairyhenderson/gomplate/releases/download/${GOMPLATE_VERSION}/gomplate_${TARGETOS:-linux}-${TARGETARCH:-amd64}${TARGETVARIANT}" \
+  "https://github.com/hairyhenderson/gomplate/releases/download/${GOMPLATE_VERSION}/gomplate_${TARGETOS:-linux}-${TARGETARCH:-amd64}${TARGETVARIANT}-slim" \
   && chmod +x /usr/local/bin/gomplate
 
 
-FROM alpine:3.13.4
+FROM alpine:3.13.1
 
 # Dex connectors, such as GitHub and Google logins require root certificates.
 # Proper installations should manage those certificates, but it's a bad user
@@ -54,9 +54,13 @@ COPY --from=builder /usr/local/src/dex/go.mod /usr/local/src/dex/go.sum /usr/loc
 COPY --from=builder /usr/local/src/dex/api/v2/go.mod /usr/local/src/dex/api/v2/go.sum /usr/local/src/dex/api/v2/
 
 COPY --from=builder /go/bin/dex /usr/local/bin/dex
-COPY --from=builder /usr/local/src/dex/web /srv/dex/web
-
 COPY --from=gomplate /usr/local/bin/gomplate /usr/local/bin/gomplate
+
+USER 1001:1001
+
+# Import frontend assets and set the correct CWD directory so the assets
+# are in the default path.
+COPY --from=builder /usr/local/src/dex/web /web
 
 USER 1001:1001
 
