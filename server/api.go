@@ -38,6 +38,8 @@ func NewAPI(s storage.Storage, logger log.Logger) api.DexServer {
 }
 
 type dexAPI struct {
+	api.UnimplementedDexServer
+
 	s      storage.Storage
 	logger log.Logger
 }
@@ -50,7 +52,7 @@ func (d dexAPI) CreateClient(ctx context.Context, req *api.CreateClientReq) (*ap
 	if req.Client.Id == "" {
 		req.Client.Id = storage.NewID()
 	}
-	if req.Client.Secret == "" {
+	if req.Client.Secret == "" && !req.Client.Public {
 		req.Client.Secret = storage.NewID() + storage.NewID()
 	}
 

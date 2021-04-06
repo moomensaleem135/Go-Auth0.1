@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	gosundheit "github.com/AppsFlyer/go-sundheit"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/kylelemons/godebug/pretty"
 	"github.com/prometheus/client_golang/prometheus"
@@ -96,6 +97,7 @@ func newTestServer(ctx context.Context, t *testing.T, updateConfig func(c *Confi
 		},
 		Logger:             logger,
 		PrometheusRegistry: prometheus.NewRegistry(),
+		HealthChecker:      gosundheit.New(),
 	}
 	if updateConfig != nil {
 		updateConfig(&config)
@@ -117,16 +119,6 @@ func newTestServer(ctx context.Context, t *testing.T, updateConfig func(c *Confi
 		t.Fatal(err)
 	}
 	server.skipApproval = true // Don't prompt for approval, just immediately redirect with code.
-
-	// Default rotation policy
-	if server.refreshTokenPolicy == nil {
-		server.refreshTokenPolicy, err = NewRefreshTokenPolicy(logger, false, "", "", "")
-		if err != nil {
-			t.Fatalf("failed to prepare rotation policy: %v", err)
-		}
-		server.refreshTokenPolicy.now = config.Now
-	}
-
 	return s, server
 }
 
