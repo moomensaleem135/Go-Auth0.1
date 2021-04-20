@@ -88,10 +88,6 @@ func (c *Config) open(logger log.Logger, waitForResources bool) (*client, error)
 		return nil, fmt.Errorf("create client: %v", err)
 	}
 
-	if err = cli.detectKubernetesVersion(); err != nil {
-		return nil, fmt.Errorf("cannot get kubernetes version: %v", err)
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 
 	logger.Info("creating custom Kubernetes resources")
@@ -104,6 +100,7 @@ func (c *Config) open(logger log.Logger, waitForResources bool) (*client, error)
 		// Try to synchronously create the custom resources once. This doesn't mean
 		// they'll immediately be available, but ensures that the client will actually try
 		// once.
+		logger.Errorf("failed creating custom resources: %v", err)
 		go func() {
 			for {
 				if cli.registerCustomResources() {
@@ -139,25 +136,21 @@ func (c *Config) open(logger log.Logger, waitForResources bool) (*client, error)
 // Creating a custom resource does not mean that they'll be immediately available.
 func (cli *client) registerCustomResources() (ok bool) {
 	ok = true
-
-	definitions := customResourceDefinitions(cli.crdAPIVersion)
-	length := len(definitions)
-
+	length := len(customResourceDefinitions)
 	for i := 0; i < length; i++ {
 		var err error
 		var resourceName string
 
-		r := definitions[i]
+		r := customResourceDefinitions[i]
 		var i interface{}
-		cli.logger.Infof("checking if custom resource %s has already been created...", r.ObjectMeta.Name)
+		cli.logger.Infof("checking if custom resource %s has been created already...", r.ObjectMeta.Name)
 		if err := cli.list(r.Spec.Names.Plural, &i); err == nil {
 			cli.logger.Infof("The custom resource %s already available, skipping create", r.ObjectMeta.Name)
 			continue
 		} else {
 			cli.logger.Infof("failed to list custom resource %s, attempting to create: %v", r.ObjectMeta.Name, err)
 		}
-
-		err = cli.postResource(cli.crdAPIVersion, "", "customresourcedefinitions", r)
+		err = cli.postResource("apiextensions.k8s.io/v1beta1", "", "customresourcedefinitions", r)
 		resourceName = r.ObjectMeta.Name
 
 		if err != nil {
@@ -184,7 +177,7 @@ func (cli *client) waitForCRDs(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*30)
 	defer cancel()
 
-	for _, crd := range customResourceDefinitions(cli.crdAPIVersion) {
+	for _, crd := range customResourceDefinitions {
 		for {
 			err := cli.isCRDReady(crd.Name)
 			if err == nil {
@@ -206,7 +199,7 @@ func (cli *client) waitForCRDs(ctx context.Context) error {
 // isCRDReady determines if a CRD is ready by inspecting its conditions.
 func (cli *client) isCRDReady(name string) error {
 	var r k8sapi.CustomResourceDefinition
-	err := cli.getResource(cli.crdAPIVersion, "", "customresourcedefinitions", name, &r)
+	err := cli.getResource("apiextensions.k8s.io/v1beta1", "", "customresourcedefinitions", name, &r)
 	if err != nil {
 		return fmt.Errorf("get crd %s: %v", name, err)
 	}
