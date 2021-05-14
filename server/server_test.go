@@ -119,6 +119,16 @@ func newTestServer(ctx context.Context, t *testing.T, updateConfig func(c *Confi
 		t.Fatal(err)
 	}
 	server.skipApproval = true // Don't prompt for approval, just immediately redirect with code.
+
+	// Default rotation policy
+	if server.refreshTokenPolicy == nil {
+		server.refreshTokenPolicy, err = NewRefreshTokenPolicy(logger, false, "", "", "")
+		if err != nil {
+			t.Fatalf("failed to prepare rotation policy: %v", err)
+		}
+		server.refreshTokenPolicy.now = config.Now
+	}
+
 	return s, server
 }
 
@@ -1497,303 +1507,164 @@ func TestOAuth2DeviceFlow(t *testing.T) {
 	var conn *mock.Callback
 	idTokensValidFor := time.Second * 30
 
-	for _, tc := range makeOAuth2Tests(clientID, clientSecret, now).tests {
-		func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
-			// Setup a dex server.
-			httpServer, s := newTestServer(ctx, t, func(c *Config) {
-				c.Issuer += "/non-root-path"
-				c.Now = now
-				c.IDTokensValidFor = idTokensValidFor
-			})
-			defer httpServer.Close()
-
-			mockConn := s.connectors["mock"]
-			conn = mockConn.Connector.(*mock.Callback)
-
-			p, err := oidc.NewProvider(ctx, httpServer.URL)
-			if err != nil {
-				t.Fatalf("failed to get provider: %v", err)
-			}
-
-			// Add the Clients to the test server
-			client := storage.Client{
-				ID:           clientID,
-				RedirectURIs: []string{deviceCallbackURI},
-				Public:       true,
-			}
-			if err := s.storage.CreateClient(client); err != nil {
-				t.Fatalf("failed to create client: %v", err)
-			}
-
-			// Grab the issuer that we'll reuse for the different endpoints to hit
-			issuer, err := url.Parse(s.issuerURL.String())
-			if err != nil {
-				t.Errorf("Could not parse issuer URL %v", err)
-			}
-
-			// Send a new Device Request
-			codeURL, _ := url.Parse(issuer.String())
-			codeURL.Path = path.Join(codeURL.Path, "device/code")
-
-			data := url.Values{}
-			data.Set("client_id", clientID)
-			data.Add("scope", strings.Join(requestedScopes, " "))
-			resp, err := http.PostForm(codeURL.String(), data)
-			if err != nil {
-				t.Errorf("Could not request device code: %v", err)
-			}
-			defer resp.Body.Close()
-			responseBody, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				t.Errorf("Could read device code response %v", err)
-			}
-			if resp.StatusCode != http.StatusOK {
-				t.Errorf("%v - Unexpected Response Type.  Expected 200 got  %v.  Response: %v", tc.name, resp.StatusCode, string(responseBody))
-			}
-			if resp.Header.Get("Cache-Control") != "no-store" {
-				t.Errorf("Cache-Control header doesn't exist in Device Code Response")
-			}
-
-			// Parse the code response
-			var deviceCode deviceCodeResponse
-			if err := json.Unmarshal(responseBody, &deviceCode); err != nil {
-				t.Errorf("Unexpected Device Code Response Format %v", string(responseBody))
-			}
-
-			// Mock the user hitting the verification URI and posting the form
-			verifyURL, _ := url.Parse(issuer.String())
-			verifyURL.Path = path.Join(verifyURL.Path, "/device/auth/verify_code")
-			urlData := url.Values{}
-			urlData.Set("user_code", deviceCode.UserCode)
-			resp, err = http.PostForm(verifyURL.String(), urlData)
-			if err != nil {
-				t.Errorf("Error Posting Form: %v", err)
-			}
-			defer resp.Body.Close()
-			responseBody, err = ioutil.ReadAll(resp.Body)
-			if err != nil {
-				t.Errorf("Could read verification response %v", err)
-			}
-			if resp.StatusCode != http.StatusOK {
-				t.Errorf("%v - Unexpected Response Type.  Expected 200 got  %v.  Response: %v", tc.name, resp.StatusCode, string(responseBody))
-			}
-
-			// Hit the Token Endpoint, and try and get an access token
-			tokenURL, _ := url.Parse(issuer.String())
-			tokenURL.Path = path.Join(tokenURL.Path, "/device/token")
-			v := url.Values{}
-			v.Add("grant_type", grantTypeDeviceCode)
-			v.Add("device_code", deviceCode.DeviceCode)
-			resp, err = http.PostForm(tokenURL.String(), v)
-			if err != nil {
-				t.Errorf("Could not request device token: %v", err)
-			}
-			defer resp.Body.Close()
-			responseBody, err = ioutil.ReadAll(resp.Body)
-			if err != nil {
-				t.Errorf("Could read device token response %v", err)
-			}
-			if resp.StatusCode != http.StatusOK {
-				t.Errorf("%v - Unexpected Token Response Type.  Expected 200 got  %v.  Response: %v", tc.name, resp.StatusCode, string(responseBody))
-			}
-
-			// Parse the response
-			var tokenRes accessTokenResponse
-			if err := json.Unmarshal(responseBody, &tokenRes); err != nil {
-				t.Errorf("Unexpected Device Access Token Response Format %v", string(responseBody))
-			}
-
-			token := &oauth2.Token{
-				AccessToken:  tokenRes.AccessToken,
-				TokenType:    tokenRes.TokenType,
-				RefreshToken: tokenRes.RefreshToken,
-			}
-			raw := make(map[string]interface{})
-			json.Unmarshal(responseBody, &raw) // no error checks for optional fields
-			token = token.WithExtra(raw)
-			if secs := tokenRes.ExpiresIn; secs > 0 {
-				token.Expiry = time.Now().Add(time.Duration(secs) * time.Second)
-			}
-
-			// Run token tests to validate info is correct
-			// Create the OAuth2 config.
-			oauth2Config := &oauth2.Config{
-				ClientID:     client.ID,
-				ClientSecret: client.Secret,
-				Endpoint:     p.Endpoint(),
-				Scopes:       requestedScopes,
-				RedirectURL:  deviceCallbackURI,
-			}
-			if len(tc.scopes) != 0 {
-				oauth2Config.Scopes = tc.scopes
-			}
-			err = tc.handleToken(ctx, p, oauth2Config, token, conn)
-			if err != nil {
-				t.Errorf("%s: %v", tc.name, err)
-			}
-		}()
-	}
-}
-
-func TestClientSecretEncryption(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	httpServer, s := newTestServer(ctx, t, func(c *Config) {
-		c.HashClientSecret = true
-	})
-	defer httpServer.Close()
-
-	clientID := "testclient"
-	clientSecret := "testclientsecret"
-	hash, err := bcrypt.GenerateFromPassword([]byte(clientSecret), bcrypt.DefaultCost)
-	if err != nil {
-		t.Fatalf("failed to bcrypt: %s", err)
-	}
-
-	// Query server's provider metadata.
-	p, err := oidc.NewProvider(ctx, httpServer.URL)
-	if err != nil {
-		t.Fatalf("failed to get provider: %v", err)
-	}
-
-	var (
-		// If the OAuth2 client didn't get a response, we need
-		// to print the requests the user saw.
-		gotCode           bool
-		reqDump, respDump []byte // Auth step, not token.
-		state             = "a_state"
-	)
-	defer func() {
-		if !gotCode {
-			t.Errorf("never got a code in callback\n%s\n%s", reqDump, respDump)
-		}
-	}()
-
-	// Setup OAuth2 client.
-	var oauth2Config *oauth2.Config
-
-	requestedScopes := []string{oidc.ScopeOpenID, "email", "profile", "groups", "offline_access"}
-
-	// Create the OAuth2 config.
-	oauth2Config = &oauth2.Config{
-		ClientID:     clientID,
-		ClientSecret: string(hash),
-		Endpoint:     p.Endpoint(),
-		Scopes:       requestedScopes,
-	}
-
-	oauth2Client := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/callback" {
-			// User is visiting app first time. Redirect to dex.
-			http.Redirect(w, r, oauth2Config.AuthCodeURL(state), http.StatusSeeOther)
-			return
-		}
-
-		// User is at '/callback' so they were just redirected _from_ dex.
-		q := r.URL.Query()
-
-		// Grab code, exchange for token.
-		if code := q.Get("code"); code != "" {
-			gotCode = true
-			token, err := oauth2Config.Exchange(ctx, code)
-			if err != nil {
-				t.Errorf("failed to exchange code for token: %v", err)
-				return
-			}
-
-			oidcConfig := &oidc.Config{SkipClientIDCheck: true}
-
-			idToken, ok := token.Extra("id_token").(string)
-			if !ok {
-				t.Errorf("no id token found")
-				return
-			}
-			if _, err := p.Verifier(oidcConfig).Verify(ctx, idToken); err != nil {
-				t.Errorf("failed to verify id token: %v", err)
-				return
-			}
-		}
-
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	oauth2Config.RedirectURL = oauth2Client.URL + "/callback"
-
-	defer oauth2Client.Close()
-
-	// Regester the client above with dex.
-	client := storage.Client{
-		ID:           clientID,
-		Secret:       clientSecret,
-		RedirectURIs: []string{oauth2Client.URL + "/callback"},
-	}
-	if err := s.storage.CreateClient(client); err != nil {
-		t.Fatalf("failed to create client: %v", err)
-	}
-
-	// Login!
-	//
-	//   1. First request to client, redirects to dex.
-	//   2. Dex "logs in" the user, redirects to client with "code".
-	//   3. Client exchanges "code" for "token" (id_token, refresh_token, etc.).
-	//   4. Test is run with OAuth2 token response.
-	//
-	resp, err := http.Get(oauth2Client.URL + "/login")
-	if err != nil {
-		t.Fatalf("get failed: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if reqDump, err = httputil.DumpRequest(resp.Request, false); err != nil {
-		t.Fatal(err)
-	}
-	if respDump, err = httputil.DumpResponse(resp, true); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestClientSecretEncryptionCost(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	clientID := "testclient"
-	clientSecret := "testclientsecret"
-	hash, err := bcrypt.GenerateFromPassword([]byte(clientSecret), 5)
-	if err != nil {
-		t.Fatalf("failed to bcrypt: %s", err)
-	}
-
-	// Register the client above with dex.
-	client := storage.Client{
-		ID:     clientID,
-		Secret: string(hash),
-	}
-
-	config := Config{
-		Storage: memory.New(logger),
-		Web: WebConfig{
-			Dir: "../web",
+	tests := makeOAuth2Tests(clientID, clientSecret, now)
+	testCases := []struct {
+		name          string
+		tokenEndpoint string
+		oauth2Tests   oauth2Tests
+	}{
+		{
+			name:          "Actual token endpoint for devices",
+			tokenEndpoint: "/token",
+			oauth2Tests:   tests,
 		},
-		Logger:             logger,
-		PrometheusRegistry: prometheus.NewRegistry(),
-		HashClientSecret:   true,
+		// TODO(nabokihms): delete temporary tests after removing the deprecated token endpoint support
+		{
+			name:          "Deprecated token endpoint for devices",
+			tokenEndpoint: "/device/token",
+			oauth2Tests:   tests,
+		},
 	}
 
-	err = config.Storage.CreateClient(client)
-	if err != nil {
-		t.Fatalf("failed to create client: %v", err)
-	}
+	for _, testCase := range testCases {
+		for _, tc := range testCase.oauth2Tests.tests {
+			t.Run(tc.name, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
 
-	_, err = newServer(ctx, config, staticRotationStrategy(testKey))
-	if err == nil {
-		t.Error("constructing server should have failed")
-	}
+				// Setup a dex server.
+				httpServer, s := newTestServer(ctx, t, func(c *Config) {
+					c.Issuer += "/non-root-path"
+					c.Now = now
+					c.IDTokensValidFor = idTokensValidFor
+				})
+				defer httpServer.Close()
 
-	if !strings.Contains(err.Error(), "failed to check cost") {
-		t.Error("should have failed with cost error")
+				mockConn := s.connectors["mock"]
+				conn = mockConn.Connector.(*mock.Callback)
+
+				p, err := oidc.NewProvider(ctx, httpServer.URL)
+				if err != nil {
+					t.Fatalf("failed to get provider: %v", err)
+				}
+
+				// Add the Clients to the test server
+				client := storage.Client{
+					ID:           clientID,
+					RedirectURIs: []string{deviceCallbackURI},
+					Public:       true,
+				}
+				if err := s.storage.CreateClient(client); err != nil {
+					t.Fatalf("failed to create client: %v", err)
+				}
+
+				// Grab the issuer that we'll reuse for the different endpoints to hit
+				issuer, err := url.Parse(s.issuerURL.String())
+				if err != nil {
+					t.Errorf("Could not parse issuer URL %v", err)
+				}
+
+				// Send a new Device Request
+				codeURL, _ := url.Parse(issuer.String())
+				codeURL.Path = path.Join(codeURL.Path, "device/code")
+
+				data := url.Values{}
+				data.Set("client_id", clientID)
+				data.Add("scope", strings.Join(requestedScopes, " "))
+				resp, err := http.PostForm(codeURL.String(), data)
+				if err != nil {
+					t.Errorf("Could not request device code: %v", err)
+				}
+				defer resp.Body.Close()
+				responseBody, err := ioutil.ReadAll(resp.Body)
+				if err != nil {
+					t.Errorf("Could read device code response %v", err)
+				}
+				if resp.StatusCode != http.StatusOK {
+					t.Errorf("%v - Unexpected Response Type.  Expected 200 got  %v.  Response: %v", tc.name, resp.StatusCode, string(responseBody))
+				}
+				if resp.Header.Get("Cache-Control") != "no-store" {
+					t.Errorf("Cache-Control header doesn't exist in Device Code Response")
+				}
+
+				// Parse the code response
+				var deviceCode deviceCodeResponse
+				if err := json.Unmarshal(responseBody, &deviceCode); err != nil {
+					t.Errorf("Unexpected Device Code Response Format %v", string(responseBody))
+				}
+
+				// Mock the user hitting the verification URI and posting the form
+				verifyURL, _ := url.Parse(issuer.String())
+				verifyURL.Path = path.Join(verifyURL.Path, "/device/auth/verify_code")
+				urlData := url.Values{}
+				urlData.Set("user_code", deviceCode.UserCode)
+				resp, err = http.PostForm(verifyURL.String(), urlData)
+				if err != nil {
+					t.Errorf("Error Posting Form: %v", err)
+				}
+				defer resp.Body.Close()
+				responseBody, err = ioutil.ReadAll(resp.Body)
+				if err != nil {
+					t.Errorf("Could read verification response %v", err)
+				}
+				if resp.StatusCode != http.StatusOK {
+					t.Errorf("%v - Unexpected Response Type.  Expected 200 got  %v.  Response: %v", tc.name, resp.StatusCode, string(responseBody))
+				}
+
+				// Hit the Token Endpoint, and try and get an access token
+				tokenURL, _ := url.Parse(issuer.String())
+				tokenURL.Path = path.Join(tokenURL.Path, testCase.tokenEndpoint)
+				v := url.Values{}
+				v.Add("grant_type", grantTypeDeviceCode)
+				v.Add("device_code", deviceCode.DeviceCode)
+				resp, err = http.PostForm(tokenURL.String(), v)
+				if err != nil {
+					t.Errorf("Could not request device token: %v", err)
+				}
+				defer resp.Body.Close()
+				responseBody, err = ioutil.ReadAll(resp.Body)
+				if err != nil {
+					t.Errorf("Could read device token response %v", err)
+				}
+				if resp.StatusCode != http.StatusOK {
+					t.Errorf("%v - Unexpected Token Response Type.  Expected 200 got  %v.  Response: %v", tc.name, resp.StatusCode, string(responseBody))
+				}
+
+				// Parse the response
+				var tokenRes accessTokenResponse
+				if err := json.Unmarshal(responseBody, &tokenRes); err != nil {
+					t.Errorf("Unexpected Device Access Token Response Format %v", string(responseBody))
+				}
+
+				token := &oauth2.Token{
+					AccessToken:  tokenRes.AccessToken,
+					TokenType:    tokenRes.TokenType,
+					RefreshToken: tokenRes.RefreshToken,
+				}
+				raw := make(map[string]interface{})
+				json.Unmarshal(responseBody, &raw) // no error checks for optional fields
+				token = token.WithExtra(raw)
+				if secs := tokenRes.ExpiresIn; secs > 0 {
+					token.Expiry = time.Now().Add(time.Duration(secs) * time.Second)
+				}
+
+				// Run token tests to validate info is correct
+				// Create the OAuth2 config.
+				oauth2Config := &oauth2.Config{
+					ClientID:     client.ID,
+					ClientSecret: client.Secret,
+					Endpoint:     p.Endpoint(),
+					Scopes:       requestedScopes,
+					RedirectURL:  deviceCallbackURI,
+				}
+				if len(tc.scopes) != 0 {
+					oauth2Config.Scopes = tc.scopes
+				}
+				err = tc.handleToken(ctx, p, oauth2Config, token, conn)
+				if err != nil {
+					t.Errorf("%s: %v", tc.name, err)
+				}
+			})
+		}
 	}
 }
