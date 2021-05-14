@@ -2,6 +2,7 @@
 
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/dexidp/dex/CI?style=flat-square)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dexidp/dex?style=flat-square)](https://goreportcard.com/report/github.com/dexidp/dex)
+[![go.dev reference](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/mod/github.com/dexidp/dex)
 [![Gitpod ready-to-code](https://img.shields.io/badge/Gitpod-ready--to--code-blue?logo=gitpod&style=flat-square)](https://gitpod.io/#https://github.com/dexidp/dex)
 
 ![logo](docs/logos/dex-horizontal-color.png)
@@ -79,7 +80,6 @@ Dex implements the following connectors:
 | [OpenShift](https://dexidp.io/docs/connectors/openshift/) | no | yes | no | alpha | |
 | [Atlassian Crowd](https://dexidp.io/docs/connectors/atlassiancrowd/) | yes | yes | yes * | beta | preferred_username claim must be configured through config |
 | [Gitea](https://dexidp.io/docs/connectors/gitea/) | yes | no | yes | alpha | |
-| [OpenStack Keystone](https://dexidp.io/docs/connectors/keystone/) | yes | yes | no | alpha | |
 
 Stable, beta, and alpha are defined as:
 
@@ -102,9 +102,13 @@ All changes or deprecations of connector features will be announced in the [rele
 * Client libraries
   * [Go][go-oidc]
 
-## Reporting a vulnerability
+## Reporting a security vulnerability
 
-Please see our [security policy](.github/SECURITY.md) for details about reporting vulnerabilities.
+Due to their public nature, GitHub and mailing lists are NOT appropriate places
+for reporting vulnerabilities.
+
+Please email the [maintainers list](mailto:cncf-dex-maintainers@lists.cncf.io) to report issues that may
+be security-related.
 
 ## Getting help
 

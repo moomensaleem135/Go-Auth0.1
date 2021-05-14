@@ -271,8 +271,7 @@ type RefreshToken struct {
 	// A single token that's rotated every time the refresh token is refreshed.
 	//
 	// May be empty.
-	Token         string
-	ObsoleteToken string
+	Token string
 
 	CreatedAt time.Time
 	LastUsed  time.Time

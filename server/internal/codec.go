@@ -3,7 +3,7 @@ package internal
 import (
 	"encoding/base64"
 
-	"google.golang.org/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 )
 
 // Marshal converts a protobuf message to a URL legal string.
