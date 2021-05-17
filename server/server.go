@@ -6,10 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -42,7 +40,6 @@ import (
 	"github.com/dexidp/dex/connector/saml"
 	"github.com/dexidp/dex/pkg/log"
 	"github.com/dexidp/dex/storage"
-	"github.com/dexidp/dex/web"
 )
 
 // LocalConnector is the local passwordDB connector which is an internal
@@ -84,10 +81,6 @@ type Config struct {
 	IDTokensValidFor       time.Duration // Defaults to 24 hours
 	AuthRequestsValidFor   time.Duration // Defaults to 24 hours
 	DeviceRequestsValidFor time.Duration // Defaults to 5 minutes
-
-	// Refresh token expiration settings
-	RefreshTokenPolicy *RefreshTokenPolicy
-
 	// If set, the server will use this connector to handle password grants
 	PasswordConnector string
 
@@ -107,21 +100,15 @@ type Config struct {
 
 // WebConfig holds the server's frontend templates and asset configuration.
 type WebConfig struct {
-	// A file path to static web assets.
+	// A filepath to web static.
 	//
 	// It is expected to contain the following directories:
 	//
 	//   * static - Static static served at "( issuer URL )/static".
 	//   * templates - HTML templates controlled by dex.
 	//   * themes/(theme) - Static static served at "( issuer URL )/theme".
-	Dir string
-
-	// Alternative way to programatically configure static web assets.
-	// If Dir is specified, WebFS is ignored.
-	// It's expected to contain the same files and directories as mentioned above.
 	//
-	// Note: this is experimental. Might get removed without notice!
-	WebFS fs.FS
+	Dir string
 
 	// Defaults to "( issuer URL )/theme/logo.png"
 	LogoURL string
@@ -175,8 +162,6 @@ type Server struct {
 	authRequestsValidFor   time.Duration
 	deviceRequestsValidFor time.Duration
 
-	refreshTokenPolicy *RefreshTokenPolicy
-
 	logger log.Logger
 }
 
@@ -204,6 +189,7 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 	if c.Storage == nil {
 		return nil, errors.New("server: storage cannot be nil")
 	}
+
 	if len(c.SupportedResponseTypes) == 0 {
 		c.SupportedResponseTypes = []string{responseTypeCode}
 	}
@@ -218,15 +204,8 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 		supported[respType] = true
 	}
 
-	webFS := web.FS()
-	if c.Web.Dir != "" {
-		webFS = os.DirFS(c.Web.Dir)
-	} else if c.Web.WebFS != nil {
-		webFS = c.Web.WebFS
-	}
-
 	web := webConfig{
-		webFS:     webFS,
+		dir:       c.Web.Dir,
 		logoURL:   c.Web.LogoURL,
 		issuerURL: c.Issuer,
 		issuer:    c.Web.Issuer,
@@ -252,7 +231,6 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 		idTokensValidFor:       value(c.IDTokensValidFor, 24*time.Hour),
 		authRequestsValidFor:   value(c.AuthRequestsValidFor, 24*time.Hour),
 		deviceRequestsValidFor: value(c.DeviceRequestsValidFor, 5*time.Minute),
-		refreshTokenPolicy:     c.RefreshTokenPolicy,
 		skipApproval:           c.SkipApprovalScreen,
 		alwaysShowLogin:        c.AlwaysShowLoginScreen,
 		now:                    now,
@@ -343,8 +321,7 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 	handleFunc("/device", s.handleDeviceExchange)
 	handleFunc("/device/auth/verify_code", s.verifyUserCode)
 	handleFunc("/device/code", s.handleDeviceCode)
-	// TODO(nabokihms): "/device/token" endpoint is deprecated, consider using /token endpoint instead
-	handleFunc("/device/token", s.handleDeviceTokenDeprecated)
+	handleFunc("/device/token", s.handleDeviceToken)
 	handleFunc(deviceCallbackURI, s.handleDeviceCallback)
 	r.HandleFunc(path.Join(issuerURL.Path, "/callback"), func(w http.ResponseWriter, r *http.Request) {
 		// Strip the X-Remote-* headers to prevent security issues on
@@ -367,7 +344,6 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 		}
 		fmt.Fprintf(w, "Health check passed")
 	}))
-
 	handlePrefix("/static", static)
 	handlePrefix("/theme", theme)
 	s.mux = r

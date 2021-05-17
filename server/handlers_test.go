@@ -7,7 +7,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -136,7 +135,7 @@ func TestHandleInvalidSAMLCallbacks(t *testing.T) {
 func TestConnectorLoginDoesNotAllowToChangeConnectorForAuthRequest(t *testing.T) {
 	memStorage := memory.New(logger)
 
-	templates, err := loadTemplates(webConfig{webFS: os.DirFS("../web")}, "templates")
+	templates, err := loadTemplates(webConfig{}, "../web/templates")
 	if err != nil {
 		t.Fatal("failed to load templates")
 	}
