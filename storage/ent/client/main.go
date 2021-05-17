@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"database/sql"
 	"hash"
 	"time"
 
@@ -18,9 +17,7 @@ import (
 var _ storage.Storage = (*Database)(nil)
 
 type Database struct {
-	client    *db.Client
-	txOptions *sql.TxOptions
-
+	client *db.Client
 	hasher func() hash.Hash
 }
 
@@ -47,13 +44,6 @@ func WithHasher(h func() hash.Hash) func(*Database) {
 	}
 }
 
-// WithTxIsolationLevel sets correct isolation level for database transactions.
-func WithTxIsolationLevel(level sql.IsolationLevel) func(*Database) {
-	return func(s *Database) {
-		s.txOptions = &sql.TxOptions{Isolation: level}
-	}
-}
-
 // Schema exposes migration schema to perform migrations.
 func (d *Database) Schema() *migrate.Schema {
 	return d.client.Schema
@@ -62,11 +52,6 @@ func (d *Database) Schema() *migrate.Schema {
 // Close calls the corresponding method of the ent database client.
 func (d *Database) Close() error {
 	return d.client.Close()
-}
-
-// BeginTx is a wrapper to begin transaction with defined options.
-func (d *Database) BeginTx(ctx context.Context) (*db.Tx, error) {
-	return d.client.BeginTx(ctx, d.txOptions)
 }
 
 // GarbageCollect removes expired entities from the database.
