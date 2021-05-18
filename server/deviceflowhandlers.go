@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dexidp/dex/pkg/log"
 	"github.com/dexidp/dex/storage"
 )
 
@@ -153,7 +152,7 @@ func (s *Server) handleDeviceCode(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeviceTokenDeprecated(w http.ResponseWriter, r *http.Request) {
-	log.Deprecated(s.logger, `The /device/token endpoint was called. It will be removed, use /token instead.`)
+	s.logger.Warn(`The deprecated "/device/token" endpoint was called. It will be removed, use "/token" instead.`)
 
 	w.Header().Set("Content-Type", "application/json")
 	switch r.Method {
