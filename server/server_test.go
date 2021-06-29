@@ -317,8 +317,7 @@ func makeOAuth2Tests(clientID string, clientSecret string, now func() time.Time)
 						return t1.Sub(t2) < within
 					}
 
-					// TODO: This is a flaky test. We need something better (eg. clockwork).
-					if !timeEq(token.Expiry, expectedExpiry, 2*time.Second) {
+					if !timeEq(token.Expiry, expectedExpiry, time.Second) {
 						return fmt.Errorf("expected expired_in to be %s, got %s", expectedExpiry, token.Expiry)
 					}
 
