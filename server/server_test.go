@@ -533,17 +533,6 @@ func makeOAuth2Tests(clientID string, clientSecret string, now func() time.Time)
 				},
 			},
 			{
-				name: "unsupported grant type",
-				retrieveTokenOptions: []oauth2.AuthCodeOption{
-					oauth2.SetAuthURLParam("grant_type", "unsupported"),
-				},
-				handleToken: basicIDTokenVerify,
-				tokenError: ErrorResponse{
-					Error:      errUnsupportedGrantType,
-					StatusCode: http.StatusBadRequest,
-				},
-			},
-			{
 				// This test ensures that PKCE work in "plain" mode (no code_challenge_method specified)
 				name: "PKCE with plain",
 				authCodeOptions: []oauth2.AuthCodeOption{
@@ -689,7 +678,7 @@ func TestOAuth2CodeFlow(t *testing.T) {
 
 	tests := makeOAuth2Tests(clientID, clientSecret, now)
 	for _, tc := range tests.tests {
-		t.Run(tc.name, func(t *testing.T) {
+		func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -823,7 +812,7 @@ func TestOAuth2CodeFlow(t *testing.T) {
 			if respDump, err = httputil.DumpResponse(resp, true); err != nil {
 				t.Fatal(err)
 			}
-		})
+		}()
 	}
 }
 

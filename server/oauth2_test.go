@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"gopkg.in/square/go-jose.v2"
 
 	"github.com/dexidp/dex/storage"
@@ -26,7 +27,8 @@ func TestParseAuthorizationRequest(t *testing.T) {
 
 		queryParams map[string]string
 
-		expectedError error
+		wantErr    bool
+		exactError *authErr
 	}{
 		{
 			name: "normal request",
@@ -76,7 +78,7 @@ func TestParseAuthorizationRequest(t *testing.T) {
 				"response_type": "code",
 				"scope":         "openid email profile",
 			},
-			expectedError: &displayedAuthErr{Status: http.StatusNotFound},
+			wantErr: true,
 		},
 		{
 			name: "invalid redirect uri",
@@ -93,7 +95,7 @@ func TestParseAuthorizationRequest(t *testing.T) {
 				"response_type": "code",
 				"scope":         "openid email profile",
 			},
-			expectedError: &displayedAuthErr{Status: http.StatusBadRequest},
+			wantErr: true,
 		},
 		{
 			name: "implicit flow",
@@ -126,7 +128,7 @@ func TestParseAuthorizationRequest(t *testing.T) {
 				"response_type": "code id_token",
 				"scope":         "openid email profile",
 			},
-			expectedError: &redirectedAuthErr{Type: errUnsupportedResponseType},
+			wantErr: true,
 		},
 		{
 			name: "only token response type",
@@ -143,7 +145,7 @@ func TestParseAuthorizationRequest(t *testing.T) {
 				"response_type": "token",
 				"scope":         "openid email profile",
 			},
-			expectedError: &redirectedAuthErr{Type: errInvalidRequest},
+			wantErr: true,
 		},
 		{
 			name: "choose connector_id",
@@ -195,7 +197,7 @@ func TestParseAuthorizationRequest(t *testing.T) {
 				"response_type": "code id_token",
 				"scope":         "openid email profile",
 			},
-			expectedError: &redirectedAuthErr{Type: errInvalidRequest},
+			wantErr: true,
 		},
 		{
 			name: "PKCE code_challenge_method plain",
@@ -267,7 +269,7 @@ func TestParseAuthorizationRequest(t *testing.T) {
 				"code_challenge_method": "invalid_method",
 				"scope":                 "openid email profile",
 			},
-			expectedError: &redirectedAuthErr{Type: errInvalidRequest},
+			wantErr: true,
 		},
 		{
 			name: "No response type",
@@ -285,7 +287,12 @@ func TestParseAuthorizationRequest(t *testing.T) {
 				"code_challenge_method": "plain",
 				"scope":                 "openid email profile",
 			},
-			expectedError: &redirectedAuthErr{Type: errInvalidRequest},
+			wantErr: true,
+			exactError: &authErr{
+				RedirectURI: "https://example.com/bar",
+				Type:        "invalid_request",
+				Description: "No response_type provided",
+			},
 		},
 	}
 
@@ -314,34 +321,13 @@ func TestParseAuthorizationRequest(t *testing.T) {
 			}
 
 			_, err := server.parseAuthorizationRequest(req)
-			if tc.expectedError == nil {
-				if err != nil {
-					t.Errorf("%s: expected no error", tc.name)
+			if tc.wantErr {
+				require.Error(t, err)
+				if tc.exactError != nil {
+					require.Equal(t, tc.exactError, err)
 				}
 			} else {
-				switch expectedErr := tc.expectedError.(type) {
-				case *redirectedAuthErr:
-					e, ok := err.(*redirectedAuthErr)
-					if !ok {
-						t.Fatalf("%s: expected redirectedAuthErr error", tc.name)
-					}
-					if e.Type != expectedErr.Type {
-						t.Errorf("%s: expected error type %v, got %v", tc.name, expectedErr.Type, e.Type)
-					}
-					if e.RedirectURI != tc.queryParams["redirect_uri"] {
-						t.Errorf("%s: expected error to be returned in redirect to %v", tc.name, tc.queryParams["redirect_uri"])
-					}
-				case *displayedAuthErr:
-					e, ok := err.(*displayedAuthErr)
-					if !ok {
-						t.Fatalf("%s: expected displayedAuthErr error", tc.name)
-					}
-					if e.Status != expectedErr.Status {
-						t.Errorf("%s: expected http status %v, got %v", tc.name, expectedErr.Status, e.Status)
-					}
-				default:
-					t.Fatalf("%s: unsupported error type", tc.name)
-				}
+				require.NoError(t, err)
 			}
 		}()
 	}

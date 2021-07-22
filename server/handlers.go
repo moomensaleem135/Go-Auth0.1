@@ -158,7 +158,7 @@ func (s *Server) handleAuthorization(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		s.renderError(r, w, http.StatusBadRequest, "Connector ID does not match a valid Connector")
+		s.tokenErrHelper(w, errInvalidConnectorID, "Connector ID does not match a valid Connector", http.StatusNotFound)
 		return
 	}
 
@@ -187,16 +187,21 @@ func (s *Server) handleConnectorLogin(w http.ResponseWriter, r *http.Request) {
 	authReq, err := s.parseAuthorizationRequest(r)
 	if err != nil {
 		s.logger.Errorf("Failed to parse authorization request: %v", err)
+		status := http.StatusInternalServerError
 
-		switch authErr := err.(type) {
-		case *redirectedAuthErr:
-			authErr.Handler().ServeHTTP(w, r)
-		case *displayedAuthErr:
-			s.renderError(r, w, authErr.Status, err.Error())
-		default:
-			panic("unsupported error type")
+		// If this is an authErr, let's let it handle the error, or update the HTTP
+		// status code
+		if err, ok := err.(*authErr); ok {
+			if handler, ok := err.Handle(); ok {
+				// client_id and redirect_uri checked out and we can redirect back to
+				// the client with the error.
+				handler.ServeHTTP(w, r)
+				return
+			}
+			status = err.Status()
 		}
 
+		s.renderError(r, w, status, err.Error())
 		return
 	}
 
@@ -765,7 +770,7 @@ func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	case grantTypePassword:
 		s.withClientFromStorage(w, r, s.handlePasswordGrant)
 	default:
-		s.tokenErrHelper(w, errUnsupportedGrantType, "", http.StatusBadRequest)
+		s.tokenErrHelper(w, errInvalidGrant, "", http.StatusBadRequest)
 	}
 }
 
@@ -1189,9 +1194,10 @@ func (s *Server) handlePasswordGrant(w http.ResponseWriter, r *http.Request, cli
 				return
 			}
 			offlineSessions := storage.OfflineSessions{
-				UserID:  refresh.Claims.UserID,
-				ConnID:  refresh.ConnectorID,
-				Refresh: make(map[string]*storage.RefreshTokenRef),
+				UserID:        refresh.Claims.UserID,
+				ConnID:        refresh.ConnectorID,
+				Refresh:       make(map[string]*storage.RefreshTokenRef),
+				ConnectorData: identity.ConnectorData,
 			}
 			offlineSessions.Refresh[tokenRef.ClientID] = &tokenRef
 
@@ -1221,6 +1227,7 @@ func (s *Server) handlePasswordGrant(w http.ResponseWriter, r *http.Request, cli
 			// Update existing OfflineSession obj with new RefreshTokenRef.
 			if err := s.storage.UpdateOfflineSessions(session.UserID, session.ConnID, func(old storage.OfflineSessions) (storage.OfflineSessions, error) {
 				old.Refresh[tokenRef.ClientID] = &tokenRef
+				old.ConnectorData = identity.ConnectorData
 				return old, nil
 			}); err != nil {
 				s.logger.Errorf("failed to update offline session: %v", err)
