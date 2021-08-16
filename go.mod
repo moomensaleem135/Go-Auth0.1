@@ -4,7 +4,7 @@ go 1.16
 
 require (
 	entgo.io/ent v0.9.0
-	github.com/AppsFlyer/go-sundheit v0.5.0
+	github.com/AppsFlyer/go-sundheit v0.4.0
 	github.com/Masterminds/semver v1.5.0
 	github.com/Masterminds/sprig/v3 v3.2.2
 	github.com/beevik/etree v1.1.0
@@ -33,7 +33,7 @@ require (
 	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2
 	golang.org/x/net v0.0.0-20210503060351-7fd8e65b6420
 	golang.org/x/oauth2 v0.0.0-20210805134026-6f1e6394065a
-	google.golang.org/api v0.53.0
+	google.golang.org/api v0.54.0
 	google.golang.org/grpc v1.40.0
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/square/go-jose.v2 v2.6.0
