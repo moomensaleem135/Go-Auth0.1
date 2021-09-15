@@ -287,8 +287,8 @@ func (rtq *RefreshTokenQuery) GroupBy(field string, fields ...string) *RefreshTo
 //		Select(refreshtoken.FieldClientID).
 //		Scan(ctx, &v)
 //
-func (rtq *RefreshTokenQuery) Select(fields ...string) *RefreshTokenSelect {
-	rtq.fields = append(rtq.fields, fields...)
+func (rtq *RefreshTokenQuery) Select(field string, fields ...string) *RefreshTokenSelect {
+	rtq.fields = append([]string{field}, fields...)
 	return &RefreshTokenSelect{RefreshTokenQuery: rtq}
 }
 
@@ -398,14 +398,10 @@ func (rtq *RefreshTokenQuery) querySpec() *sqlgraph.QuerySpec {
 func (rtq *RefreshTokenQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	builder := sql.Dialect(rtq.driver.Dialect())
 	t1 := builder.Table(refreshtoken.Table)
-	columns := rtq.fields
-	if len(columns) == 0 {
-		columns = refreshtoken.Columns
-	}
-	selector := builder.Select(t1.Columns(columns...)...).From(t1)
+	selector := builder.Select(t1.Columns(refreshtoken.Columns...)...).From(t1)
 	if rtq.sql != nil {
 		selector = rtq.sql
-		selector.Select(selector.Columns(columns...)...)
+		selector.Select(selector.Columns(refreshtoken.Columns...)...)
 	}
 	for _, p := range rtq.predicates {
 		p(selector)
@@ -673,24 +669,13 @@ func (rtgb *RefreshTokenGroupBy) sqlScan(ctx context.Context, v interface{}) err
 }
 
 func (rtgb *RefreshTokenGroupBy) sqlQuery() *sql.Selector {
-	selector := rtgb.sql.Select()
-	aggregation := make([]string, 0, len(rtgb.fns))
+	selector := rtgb.sql
+	columns := make([]string, 0, len(rtgb.fields)+len(rtgb.fns))
+	columns = append(columns, rtgb.fields...)
 	for _, fn := range rtgb.fns {
-		aggregation = append(aggregation, fn(selector))
+		columns = append(columns, fn(selector))
 	}
-	// If no columns were selected in a custom aggregation function, the default
-	// selection is the fields used for "group-by", and the aggregation functions.
-	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(rtgb.fields)+len(rtgb.fns))
-		for _, f := range rtgb.fields {
-			columns = append(columns, selector.C(f))
-		}
-		for _, c := range aggregation {
-			columns = append(columns, c)
-		}
-		selector.Select(columns...)
-	}
-	return selector.GroupBy(selector.Columns(rtgb.fields...)...)
+	return selector.Select(columns...).GroupBy(rtgb.fields...)
 }
 
 // RefreshTokenSelect is the builder for selecting fields of RefreshToken entities.
@@ -906,10 +891,16 @@ func (rts *RefreshTokenSelect) BoolX(ctx context.Context) bool {
 
 func (rts *RefreshTokenSelect) sqlScan(ctx context.Context, v interface{}) error {
 	rows := &sql.Rows{}
-	query, args := rts.sql.Query()
+	query, args := rts.sqlQuery().Query()
 	if err := rts.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
 	return sql.ScanSlice(rows, v)
+}
+
+func (rts *RefreshTokenSelect) sqlQuery() sql.Querier {
+	selector := rts.sql
+	selector.Select(selector.Columns(rts.fields...)...)
+	return selector
 }

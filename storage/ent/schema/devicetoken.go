@@ -33,10 +33,8 @@ func (DeviceToken) Fields() []ent.Field {
 			SchemaType(textSchema).
 			NotEmpty(),
 		field.Bytes("token").Nillable().Optional(),
-		field.Time("expiry").
-			SchemaType(timeSchema),
-		field.Time("last_request").
-			SchemaType(timeSchema),
+		field.Time("expiry"),
+		field.Time("last_request"),
 		field.Int("poll_interval"),
 	}
 }

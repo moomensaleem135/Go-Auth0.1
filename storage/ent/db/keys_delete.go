@@ -20,9 +20,9 @@ type KeysDelete struct {
 	mutation *KeysMutation
 }
 
-// Where appends a list predicates to the KeysDelete builder.
+// Where adds a new predicate to the KeysDelete builder.
 func (kd *KeysDelete) Where(ps ...predicate.Keys) *KeysDelete {
-	kd.mutation.Where(ps...)
+	kd.mutation.predicates = append(kd.mutation.predicates, ps...)
 	return kd
 }
 
@@ -46,9 +46,6 @@ func (kd *KeysDelete) Exec(ctx context.Context) (int, error) {
 			return affected, err
 		})
 		for i := len(kd.hooks) - 1; i >= 0; i-- {
-			if kd.hooks[i] == nil {
-				return 0, fmt.Errorf("db: uninitialized hook (forgotten import db/runtime?)")
-			}
 			mut = kd.hooks[i](mut)
 		}
 		if _, err := mut.Mutate(ctx, kd.mutation); err != nil {

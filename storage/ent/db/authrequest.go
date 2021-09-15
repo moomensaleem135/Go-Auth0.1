@@ -98,6 +98,7 @@ func (ar *AuthRequest) assignValues(columns []string, values []interface{}) erro
 				ar.ClientID = value.String
 			}
 		case authrequest.FieldScopes:
+
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field scopes", values[i])
 			} else if value != nil && len(*value) > 0 {
@@ -106,6 +107,7 @@ func (ar *AuthRequest) assignValues(columns []string, values []interface{}) erro
 				}
 			}
 		case authrequest.FieldResponseTypes:
+
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field response_types", values[i])
 			} else if value != nil && len(*value) > 0 {
@@ -168,6 +170,7 @@ func (ar *AuthRequest) assignValues(columns []string, values []interface{}) erro
 				ar.ClaimsEmailVerified = value.Bool
 			}
 		case authrequest.FieldClaimsGroups:
+
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field claims_groups", values[i])
 			} else if value != nil && len(*value) > 0 {

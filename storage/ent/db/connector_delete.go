@@ -20,9 +20,9 @@ type ConnectorDelete struct {
 	mutation *ConnectorMutation
 }
 
-// Where appends a list predicates to the ConnectorDelete builder.
+// Where adds a new predicate to the ConnectorDelete builder.
 func (cd *ConnectorDelete) Where(ps ...predicate.Connector) *ConnectorDelete {
-	cd.mutation.Where(ps...)
+	cd.mutation.predicates = append(cd.mutation.predicates, ps...)
 	return cd
 }
 
@@ -46,9 +46,6 @@ func (cd *ConnectorDelete) Exec(ctx context.Context) (int, error) {
 			return affected, err
 		})
 		for i := len(cd.hooks) - 1; i >= 0; i-- {
-			if cd.hooks[i] == nil {
-				return 0, fmt.Errorf("db: uninitialized hook (forgotten import db/runtime?)")
-			}
 			mut = cd.hooks[i](mut)
 		}
 		if _, err := mut.Mutate(ctx, cd.mutation); err != nil {

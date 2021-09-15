@@ -40,8 +40,7 @@ func (DeviceRequest) Fields() []ent.Field {
 			NotEmpty(),
 		field.JSON("scopes", []string{}).
 			Optional(),
-		field.Time("expiry").
-			SchemaType(timeSchema),
+		field.Time("expiry"),
 	}
 }
 

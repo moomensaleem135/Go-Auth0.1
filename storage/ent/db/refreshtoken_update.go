@@ -21,9 +21,9 @@ type RefreshTokenUpdate struct {
 	mutation *RefreshTokenMutation
 }
 
-// Where appends a list predicates to the RefreshTokenUpdate builder.
+// Where adds a new predicate for the RefreshTokenUpdate builder.
 func (rtu *RefreshTokenUpdate) Where(ps ...predicate.RefreshToken) *RefreshTokenUpdate {
-	rtu.mutation.Where(ps...)
+	rtu.mutation.predicates = append(rtu.mutation.predicates, ps...)
 	return rtu
 }
 
@@ -206,9 +206,6 @@ func (rtu *RefreshTokenUpdate) Save(ctx context.Context) (int, error) {
 			return affected, err
 		})
 		for i := len(rtu.hooks) - 1; i >= 0; i-- {
-			if rtu.hooks[i] == nil {
-				return 0, fmt.Errorf("db: uninitialized hook (forgotten import db/runtime?)")
-			}
 			mut = rtu.hooks[i](mut)
 		}
 		if _, err := mut.Mutate(ctx, rtu.mutation); err != nil {
@@ -419,8 +416,8 @@ func (rtu *RefreshTokenUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if n, err = sqlgraph.UpdateNodes(ctx, rtu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{refreshtoken.Label}
-		} else if sqlgraph.IsConstraintError(err) {
-			err = &ConstraintError{err.Error(), err}
+		} else if cerr, ok := isSQLConstraintError(err); ok {
+			err = cerr
 		}
 		return 0, err
 	}
@@ -621,9 +618,6 @@ func (rtuo *RefreshTokenUpdateOne) Save(ctx context.Context) (*RefreshToken, err
 			return node, err
 		})
 		for i := len(rtuo.hooks) - 1; i >= 0; i-- {
-			if rtuo.hooks[i] == nil {
-				return nil, fmt.Errorf("db: uninitialized hook (forgotten import db/runtime?)")
-			}
 			mut = rtuo.hooks[i](mut)
 		}
 		if _, err := mut.Mutate(ctx, rtuo.mutation); err != nil {
@@ -854,8 +848,8 @@ func (rtuo *RefreshTokenUpdateOne) sqlSave(ctx context.Context) (_node *RefreshT
 	if err = sqlgraph.UpdateNode(ctx, rtuo.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{refreshtoken.Label}
-		} else if sqlgraph.IsConstraintError(err) {
-			err = &ConstraintError{err.Error(), err}
+		} else if cerr, ok := isSQLConstraintError(err); ok {
+			err = cerr
 		}
 		return nil, err
 	}

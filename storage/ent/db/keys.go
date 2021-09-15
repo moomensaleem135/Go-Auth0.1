@@ -62,6 +62,7 @@ func (k *Keys) assignValues(columns []string, values []interface{}) error {
 				k.ID = value.String
 			}
 		case keys.FieldVerificationKeys:
+
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field verification_keys", values[i])
 			} else if value != nil && len(*value) > 0 {
@@ -70,6 +71,7 @@ func (k *Keys) assignValues(columns []string, values []interface{}) error {
 				}
 			}
 		case keys.FieldSigningKey:
+
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field signing_key", values[i])
 			} else if value != nil && len(*value) > 0 {
@@ -78,6 +80,7 @@ func (k *Keys) assignValues(columns []string, values []interface{}) error {
 				}
 			}
 		case keys.FieldSigningKeyPub:
+
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field signing_key_pub", values[i])
 			} else if value != nil && len(*value) > 0 {

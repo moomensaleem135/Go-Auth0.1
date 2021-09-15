@@ -99,21 +99,7 @@ func init() {
 	// connectorDescID is the schema descriptor for id field.
 	connectorDescID := connectorFields[0].Descriptor()
 	// connector.IDValidator is a validator for the "id" field. It is called by the builders before save.
-	connector.IDValidator = func() func(string) error {
-		validators := connectorDescID.Validators
-		fns := [...]func(string) error{
-			validators[0].(func(string) error),
-			validators[1].(func(string) error),
-		}
-		return func(id string) error {
-			for _, fn := range fns {
-				if err := fn(id); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-	}()
+	connector.IDValidator = connectorDescID.Validators[0].(func(string) error)
 	devicerequestFields := schema.DeviceRequest{}.Fields()
 	_ = devicerequestFields
 	// devicerequestDescUserCode is the schema descriptor for user_code field.
@@ -165,21 +151,7 @@ func init() {
 	// oauth2clientDescID is the schema descriptor for id field.
 	oauth2clientDescID := oauth2clientFields[0].Descriptor()
 	// oauth2client.IDValidator is a validator for the "id" field. It is called by the builders before save.
-	oauth2client.IDValidator = func() func(string) error {
-		validators := oauth2clientDescID.Validators
-		fns := [...]func(string) error{
-			validators[0].(func(string) error),
-			validators[1].(func(string) error),
-		}
-		return func(id string) error {
-			for _, fn := range fns {
-				if err := fn(id); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-	}()
+	oauth2client.IDValidator = oauth2clientDescID.Validators[0].(func(string) error)
 	offlinesessionFields := schema.OfflineSession{}.Fields()
 	_ = offlinesessionFields
 	// offlinesessionDescUserID is the schema descriptor for user_id field.

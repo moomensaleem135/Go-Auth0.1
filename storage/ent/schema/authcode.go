@@ -73,8 +73,7 @@ func (AuthCode) Fields() []ent.Field {
 		field.Bytes("connector_data").
 			Nillable().
 			Optional(),
-		field.Time("expiry").
-			SchemaType(timeSchema),
+		field.Time("expiry"),
 		field.Text("code_challenge").
 			SchemaType(textSchema).
 			Default(""),

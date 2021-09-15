@@ -20,9 +20,9 @@ type OfflineSessionUpdate struct {
 	mutation *OfflineSessionMutation
 }
 
-// Where appends a list predicates to the OfflineSessionUpdate builder.
+// Where adds a new predicate for the OfflineSessionUpdate builder.
 func (osu *OfflineSessionUpdate) Where(ps ...predicate.OfflineSession) *OfflineSessionUpdate {
-	osu.mutation.Where(ps...)
+	osu.mutation.predicates = append(osu.mutation.predicates, ps...)
 	return osu
 }
 
@@ -87,9 +87,6 @@ func (osu *OfflineSessionUpdate) Save(ctx context.Context) (int, error) {
 			return affected, err
 		})
 		for i := len(osu.hooks) - 1; i >= 0; i-- {
-			if osu.hooks[i] == nil {
-				return 0, fmt.Errorf("db: uninitialized hook (forgotten import db/runtime?)")
-			}
 			mut = osu.hooks[i](mut)
 		}
 		if _, err := mut.Mutate(ctx, osu.mutation); err != nil {
@@ -191,8 +188,8 @@ func (osu *OfflineSessionUpdate) sqlSave(ctx context.Context) (n int, err error)
 	if n, err = sqlgraph.UpdateNodes(ctx, osu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{offlinesession.Label}
-		} else if sqlgraph.IsConstraintError(err) {
-			err = &ConstraintError{err.Error(), err}
+		} else if cerr, ok := isSQLConstraintError(err); ok {
+			err = cerr
 		}
 		return 0, err
 	}
@@ -275,9 +272,6 @@ func (osuo *OfflineSessionUpdateOne) Save(ctx context.Context) (*OfflineSession,
 			return node, err
 		})
 		for i := len(osuo.hooks) - 1; i >= 0; i-- {
-			if osuo.hooks[i] == nil {
-				return nil, fmt.Errorf("db: uninitialized hook (forgotten import db/runtime?)")
-			}
 			mut = osuo.hooks[i](mut)
 		}
 		if _, err := mut.Mutate(ctx, osuo.mutation); err != nil {
@@ -399,8 +393,8 @@ func (osuo *OfflineSessionUpdateOne) sqlSave(ctx context.Context) (_node *Offlin
 	if err = sqlgraph.UpdateNode(ctx, osuo.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{offlinesession.Label}
-		} else if sqlgraph.IsConstraintError(err) {
-			err = &ConstraintError{err.Error(), err}
+		} else if cerr, ok := isSQLConstraintError(err); ok {
+			err = cerr
 		}
 		return nil, err
 	}

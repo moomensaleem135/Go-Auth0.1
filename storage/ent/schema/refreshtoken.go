@@ -81,10 +81,8 @@ func (RefreshToken) Fields() []ent.Field {
 			Default(""),
 
 		field.Time("created_at").
-			SchemaType(timeSchema).
 			Default(time.Now),
 		field.Time("last_used").
-			SchemaType(timeSchema).
 			Default(time.Now),
 	}
 }

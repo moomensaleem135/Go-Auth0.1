@@ -23,9 +23,9 @@ type KeysUpdate struct {
 	mutation *KeysMutation
 }
 
-// Where appends a list predicates to the KeysUpdate builder.
+// Where adds a new predicate for the KeysUpdate builder.
 func (ku *KeysUpdate) Where(ps ...predicate.Keys) *KeysUpdate {
-	ku.mutation.Where(ps...)
+	ku.mutation.predicates = append(ku.mutation.predicates, ps...)
 	return ku
 }
 
@@ -78,9 +78,6 @@ func (ku *KeysUpdate) Save(ctx context.Context) (int, error) {
 			return affected, err
 		})
 		for i := len(ku.hooks) - 1; i >= 0; i-- {
-			if ku.hooks[i] == nil {
-				return 0, fmt.Errorf("db: uninitialized hook (forgotten import db/runtime?)")
-			}
 			mut = ku.hooks[i](mut)
 		}
 		if _, err := mut.Mutate(ctx, ku.mutation); err != nil {
@@ -161,8 +158,8 @@ func (ku *KeysUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if n, err = sqlgraph.UpdateNodes(ctx, ku.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{keys.Label}
-		} else if sqlgraph.IsConstraintError(err) {
-			err = &ConstraintError{err.Error(), err}
+		} else if cerr, ok := isSQLConstraintError(err); ok {
+			err = cerr
 		}
 		return 0, err
 	}
@@ -233,9 +230,6 @@ func (kuo *KeysUpdateOne) Save(ctx context.Context) (*Keys, error) {
 			return node, err
 		})
 		for i := len(kuo.hooks) - 1; i >= 0; i-- {
-			if kuo.hooks[i] == nil {
-				return nil, fmt.Errorf("db: uninitialized hook (forgotten import db/runtime?)")
-			}
 			mut = kuo.hooks[i](mut)
 		}
 		if _, err := mut.Mutate(ctx, kuo.mutation); err != nil {
@@ -336,8 +330,8 @@ func (kuo *KeysUpdateOne) sqlSave(ctx context.Context) (_node *Keys, err error) 
 	if err = sqlgraph.UpdateNode(ctx, kuo.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{keys.Label}
-		} else if sqlgraph.IsConstraintError(err) {
-			err = &ConstraintError{err.Error(), err}
+		} else if cerr, ok := isSQLConstraintError(err); ok {
+			err = cerr
 		}
 		return nil, err
 	}

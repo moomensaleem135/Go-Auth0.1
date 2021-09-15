@@ -287,8 +287,8 @@ func (acq *AuthCodeQuery) GroupBy(field string, fields ...string) *AuthCodeGroup
 //		Select(authcode.FieldClientID).
 //		Scan(ctx, &v)
 //
-func (acq *AuthCodeQuery) Select(fields ...string) *AuthCodeSelect {
-	acq.fields = append(acq.fields, fields...)
+func (acq *AuthCodeQuery) Select(field string, fields ...string) *AuthCodeSelect {
+	acq.fields = append([]string{field}, fields...)
 	return &AuthCodeSelect{AuthCodeQuery: acq}
 }
 
@@ -398,14 +398,10 @@ func (acq *AuthCodeQuery) querySpec() *sqlgraph.QuerySpec {
 func (acq *AuthCodeQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	builder := sql.Dialect(acq.driver.Dialect())
 	t1 := builder.Table(authcode.Table)
-	columns := acq.fields
-	if len(columns) == 0 {
-		columns = authcode.Columns
-	}
-	selector := builder.Select(t1.Columns(columns...)...).From(t1)
+	selector := builder.Select(t1.Columns(authcode.Columns...)...).From(t1)
 	if acq.sql != nil {
 		selector = acq.sql
-		selector.Select(selector.Columns(columns...)...)
+		selector.Select(selector.Columns(authcode.Columns...)...)
 	}
 	for _, p := range acq.predicates {
 		p(selector)
@@ -673,24 +669,13 @@ func (acgb *AuthCodeGroupBy) sqlScan(ctx context.Context, v interface{}) error {
 }
 
 func (acgb *AuthCodeGroupBy) sqlQuery() *sql.Selector {
-	selector := acgb.sql.Select()
-	aggregation := make([]string, 0, len(acgb.fns))
+	selector := acgb.sql
+	columns := make([]string, 0, len(acgb.fields)+len(acgb.fns))
+	columns = append(columns, acgb.fields...)
 	for _, fn := range acgb.fns {
-		aggregation = append(aggregation, fn(selector))
+		columns = append(columns, fn(selector))
 	}
-	// If no columns were selected in a custom aggregation function, the default
-	// selection is the fields used for "group-by", and the aggregation functions.
-	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(acgb.fields)+len(acgb.fns))
-		for _, f := range acgb.fields {
-			columns = append(columns, selector.C(f))
-		}
-		for _, c := range aggregation {
-			columns = append(columns, c)
-		}
-		selector.Select(columns...)
-	}
-	return selector.GroupBy(selector.Columns(acgb.fields...)...)
+	return selector.Select(columns...).GroupBy(acgb.fields...)
 }
 
 // AuthCodeSelect is the builder for selecting fields of AuthCode entities.
@@ -906,10 +891,16 @@ func (acs *AuthCodeSelect) BoolX(ctx context.Context) bool {
 
 func (acs *AuthCodeSelect) sqlScan(ctx context.Context, v interface{}) error {
 	rows := &sql.Rows{}
-	query, args := acs.sql.Query()
+	query, args := acs.sqlQuery().Query()
 	if err := acs.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
 	return sql.ScanSlice(rows, v)
+}
+
+func (acs *AuthCodeSelect) sqlQuery() sql.Querier {
+	selector := acs.sql
+	selector.Select(selector.Columns(acs.fields...)...)
+	return selector
 }
