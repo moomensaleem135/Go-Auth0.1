@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -170,8 +169,6 @@ type Server struct {
 
 	supportedResponseTypes map[string]bool
 
-	supportedGrantTypes []string
-
 	now func() time.Time
 
 	idTokensValidFor       time.Duration
@@ -212,21 +209,15 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 		c.SupportedResponseTypes = []string{responseTypeCode}
 	}
 
-	supportedRes := make(map[string]bool)
+	supported := make(map[string]bool)
 	for _, respType := range c.SupportedResponseTypes {
 		switch respType {
 		case responseTypeCode, responseTypeIDToken, responseTypeToken:
 		default:
 			return nil, fmt.Errorf("unsupported response_type %q", respType)
 		}
-		supportedRes[respType] = true
+		supported[respType] = true
 	}
-
-	supportedGrant := []string{grantTypeAuthorizationCode, grantTypeRefreshToken, grantTypeDeviceCode} // default
-	if c.PasswordConnector != "" {
-		supportedGrant = append(supportedGrant, grantTypePassword)
-	}
-	sort.Strings(supportedGrant)
 
 	webFS := web.FS()
 	if c.Web.Dir != "" {
@@ -258,8 +249,7 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 		issuerURL:              *issuerURL,
 		connectors:             make(map[string]Connector),
 		storage:                newKeyCacher(c.Storage, now),
-		supportedResponseTypes: supportedRes,
-		supportedGrantTypes:    supportedGrant,
+		supportedResponseTypes: supported,
 		idTokensValidFor:       value(c.IDTokensValidFor, 24*time.Hour),
 		authRequestsValidFor:   value(c.AuthRequestsValidFor, 24*time.Hour),
 		deviceRequestsValidFor: value(c.DeviceRequestsValidFor, 5*time.Minute),
@@ -312,7 +302,7 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 		}
 	}
 
-	r := mux.NewRouter()
+	r := mux.NewRouter().SkipClean(true).UseEncodedPath()
 	handle := func(p string, h http.Handler) {
 		r.Handle(path.Join(issuerURL.Path, p), instrumentHandlerCounter(p, h))
 	}
