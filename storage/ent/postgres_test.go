@@ -20,6 +20,13 @@ const (
 	PostgresEntPasswordEnv = "DEX_POSTGRES_ENT_PASSWORD"
 )
 
+func getenv(key, defaultVal string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return defaultVal
+}
+
 func postgresTestConfig(host string, port uint64) *Postgres {
 	return &Postgres{
 		NetworkDB: NetworkDB{

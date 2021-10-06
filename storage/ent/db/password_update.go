@@ -20,9 +20,9 @@ type PasswordUpdate struct {
 	mutation *PasswordMutation
 }
 
-// Where appends a list predicates to the PasswordUpdate builder.
+// Where adds a new predicate for the PasswordUpdate builder.
 func (pu *PasswordUpdate) Where(ps ...predicate.Password) *PasswordUpdate {
-	pu.mutation.Where(ps...)
+	pu.mutation.predicates = append(pu.mutation.predicates, ps...)
 	return pu
 }
 
@@ -81,9 +81,6 @@ func (pu *PasswordUpdate) Save(ctx context.Context) (int, error) {
 			return affected, err
 		})
 		for i := len(pu.hooks) - 1; i >= 0; i-- {
-			if pu.hooks[i] == nil {
-				return 0, fmt.Errorf("db: uninitialized hook (forgotten import db/runtime?)")
-			}
 			mut = pu.hooks[i](mut)
 		}
 		if _, err := mut.Mutate(ctx, pu.mutation); err != nil {
@@ -184,8 +181,8 @@ func (pu *PasswordUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if n, err = sqlgraph.UpdateNodes(ctx, pu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{password.Label}
-		} else if sqlgraph.IsConstraintError(err) {
-			err = &ConstraintError{err.Error(), err}
+		} else if cerr, ok := isSQLConstraintError(err); ok {
+			err = cerr
 		}
 		return 0, err
 	}
@@ -262,9 +259,6 @@ func (puo *PasswordUpdateOne) Save(ctx context.Context) (*Password, error) {
 			return node, err
 		})
 		for i := len(puo.hooks) - 1; i >= 0; i-- {
-			if puo.hooks[i] == nil {
-				return nil, fmt.Errorf("db: uninitialized hook (forgotten import db/runtime?)")
-			}
 			mut = puo.hooks[i](mut)
 		}
 		if _, err := mut.Mutate(ctx, puo.mutation); err != nil {
@@ -385,8 +379,8 @@ func (puo *PasswordUpdateOne) sqlSave(ctx context.Context) (_node *Password, err
 	if err = sqlgraph.UpdateNode(ctx, puo.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{password.Label}
-		} else if sqlgraph.IsConstraintError(err) {
-			err = &ConstraintError{err.Error(), err}
+		} else if cerr, ok := isSQLConstraintError(err); ok {
+			err = cerr
 		}
 		return nil, err
 	}

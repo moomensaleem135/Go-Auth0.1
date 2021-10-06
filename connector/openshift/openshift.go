@@ -6,10 +6,9 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -196,7 +195,7 @@ func (c *openshiftConnector) user(ctx context.Context, client *http.Client) (u u
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
+		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			return u, fmt.Errorf("read body: %v", err)
 		}
@@ -224,7 +223,7 @@ func newHTTPClient(insecureCA bool, rootCA string) (*http.Client, error) {
 		tlsConfig = tls.Config{InsecureSkipVerify: true}
 	} else if rootCA != "" {
 		tlsConfig = tls.Config{RootCAs: x509.NewCertPool()}
-		rootCABytes, err := os.ReadFile(rootCA)
+		rootCABytes, err := ioutil.ReadFile(rootCA)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read root-ca: %v", err)
 		}

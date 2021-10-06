@@ -6,7 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -152,7 +152,7 @@ func newTestCrowdConnector(baseURL string) crowdConnector {
 	connector := crowdConnector{}
 	connector.BaseURL = baseURL
 	connector.logger = &logrus.Logger{
-		Out:       io.Discard,
+		Out:       ioutil.Discard,
 		Level:     logrus.DebugLevel,
 		Formatter: &logrus.TextFormatter{DisableColors: true},
 	}

@@ -28,7 +28,6 @@ func (OAuth2Client) Fields() []ent.Field {
 	return []ent.Field{
 		field.Text("id").
 			SchemaType(textSchema).
-			MaxLen(100).
 			NotEmpty().
 			Unique(),
 		field.Text("secret").

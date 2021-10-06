@@ -90,6 +90,7 @@ func (rt *RefreshToken) assignValues(columns []string, values []interface{}) err
 				rt.ClientID = value.String
 			}
 		case refreshtoken.FieldScopes:
+
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field scopes", values[i])
 			} else if value != nil && len(*value) > 0 {
@@ -128,6 +129,7 @@ func (rt *RefreshToken) assignValues(columns []string, values []interface{}) err
 				rt.ClaimsEmailVerified = value.Bool
 			}
 		case refreshtoken.FieldClaimsGroups:
+
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field claims_groups", values[i])
 			} else if value != nil && len(*value) > 0 {

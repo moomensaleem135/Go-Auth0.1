@@ -20,9 +20,9 @@ type PasswordDelete struct {
 	mutation *PasswordMutation
 }
 
-// Where appends a list predicates to the PasswordDelete builder.
+// Where adds a new predicate to the PasswordDelete builder.
 func (pd *PasswordDelete) Where(ps ...predicate.Password) *PasswordDelete {
-	pd.mutation.Where(ps...)
+	pd.mutation.predicates = append(pd.mutation.predicates, ps...)
 	return pd
 }
 
@@ -46,9 +46,6 @@ func (pd *PasswordDelete) Exec(ctx context.Context) (int, error) {
 			return affected, err
 		})
 		for i := len(pd.hooks) - 1; i >= 0; i-- {
-			if pd.hooks[i] == nil {
-				return 0, fmt.Errorf("db: uninitialized hook (forgotten import db/runtime?)")
-			}
 			mut = pd.hooks[i](mut)
 		}
 		if _, err := mut.Mutate(ctx, pd.mutation); err != nil {

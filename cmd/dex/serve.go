@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -75,7 +76,7 @@ func commandServe() *cobra.Command {
 
 func runServe(options serveOptions) error {
 	configFile := options.config
-	configData, err := os.ReadFile(configFile)
+	configData, err := ioutil.ReadFile(configFile)
 	if err != nil {
 		return fmt.Errorf("failed to read config file %s: %v", configFile, err)
 	}
@@ -147,7 +148,7 @@ func runServe(options serveOptions) error {
 		if c.GRPC.TLSClientCA != "" {
 			// Parse certificates from client CA file to a new CertPool.
 			cPool := x509.NewCertPool()
-			clientCert, err := os.ReadFile(c.GRPC.TLSClientCA)
+			clientCert, err := ioutil.ReadFile(c.GRPC.TLSClientCA)
 			if err != nil {
 				return fmt.Errorf("invalid config: reading from client CA file: %v", err)
 			}

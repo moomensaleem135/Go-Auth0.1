@@ -3,6 +3,7 @@ package kubernetes
 import (
 	"hash"
 	"hash/fnv"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -71,7 +72,7 @@ func TestInClusterTransport(t *testing.T) {
 	fpath := filepath.Join(os.TempDir(), "test.in_cluster")
 	defer os.RemoveAll(fpath)
 
-	err = os.WriteFile(fpath, []byte("def"), 0o644)
+	err = ioutil.WriteFile(fpath, []byte("def"), 0o644)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -135,7 +136,7 @@ func TestGetClusterConfigNamespace(t *testing.T) {
 
 	var namespaceFile string
 	{
-		tmpfile, err := os.CreateTemp(os.TempDir(), "test-get-cluster-config-namespace")
+		tmpfile, err := ioutil.TempFile(os.TempDir(), "test-get-cluster-config-namespace")
 		require.NoError(t, err)
 
 		_, err = tmpfile.Write([]byte("namespace-from-file"))

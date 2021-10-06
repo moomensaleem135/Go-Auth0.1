@@ -287,8 +287,8 @@ func (oq *OAuth2ClientQuery) GroupBy(field string, fields ...string) *OAuth2Clie
 //		Select(oauth2client.FieldSecret).
 //		Scan(ctx, &v)
 //
-func (oq *OAuth2ClientQuery) Select(fields ...string) *OAuth2ClientSelect {
-	oq.fields = append(oq.fields, fields...)
+func (oq *OAuth2ClientQuery) Select(field string, fields ...string) *OAuth2ClientSelect {
+	oq.fields = append([]string{field}, fields...)
 	return &OAuth2ClientSelect{OAuth2ClientQuery: oq}
 }
 
@@ -398,14 +398,10 @@ func (oq *OAuth2ClientQuery) querySpec() *sqlgraph.QuerySpec {
 func (oq *OAuth2ClientQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	builder := sql.Dialect(oq.driver.Dialect())
 	t1 := builder.Table(oauth2client.Table)
-	columns := oq.fields
-	if len(columns) == 0 {
-		columns = oauth2client.Columns
-	}
-	selector := builder.Select(t1.Columns(columns...)...).From(t1)
+	selector := builder.Select(t1.Columns(oauth2client.Columns...)...).From(t1)
 	if oq.sql != nil {
 		selector = oq.sql
-		selector.Select(selector.Columns(columns...)...)
+		selector.Select(selector.Columns(oauth2client.Columns...)...)
 	}
 	for _, p := range oq.predicates {
 		p(selector)
@@ -673,24 +669,13 @@ func (ogb *OAuth2ClientGroupBy) sqlScan(ctx context.Context, v interface{}) erro
 }
 
 func (ogb *OAuth2ClientGroupBy) sqlQuery() *sql.Selector {
-	selector := ogb.sql.Select()
-	aggregation := make([]string, 0, len(ogb.fns))
+	selector := ogb.sql
+	columns := make([]string, 0, len(ogb.fields)+len(ogb.fns))
+	columns = append(columns, ogb.fields...)
 	for _, fn := range ogb.fns {
-		aggregation = append(aggregation, fn(selector))
+		columns = append(columns, fn(selector))
 	}
-	// If no columns were selected in a custom aggregation function, the default
-	// selection is the fields used for "group-by", and the aggregation functions.
-	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(ogb.fields)+len(ogb.fns))
-		for _, f := range ogb.fields {
-			columns = append(columns, selector.C(f))
-		}
-		for _, c := range aggregation {
-			columns = append(columns, c)
-		}
-		selector.Select(columns...)
-	}
-	return selector.GroupBy(selector.Columns(ogb.fields...)...)
+	return selector.Select(columns...).GroupBy(ogb.fields...)
 }
 
 // OAuth2ClientSelect is the builder for selecting fields of OAuth2Client entities.
@@ -906,10 +891,16 @@ func (os *OAuth2ClientSelect) BoolX(ctx context.Context) bool {
 
 func (os *OAuth2ClientSelect) sqlScan(ctx context.Context, v interface{}) error {
 	rows := &sql.Rows{}
-	query, args := os.sql.Query()
+	query, args := os.sqlQuery().Query()
 	if err := os.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
 	return sql.ScanSlice(rows, v)
+}
+
+func (os *OAuth2ClientSelect) sqlQuery() sql.Querier {
+	selector := os.sql
+	selector.Select(selector.Columns(os.fields...)...)
+	return selector
 }

@@ -8,10 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -211,7 +210,7 @@ func (e *oauth2Error) Error() string {
 // newHTTPClient returns a new HTTP client that trusts the custom declared rootCA cert.
 func newHTTPClient(rootCA string) (*http.Client, error) {
 	tlsConfig := tls.Config{RootCAs: x509.NewCertPool()}
-	rootCABytes, err := os.ReadFile(rootCA)
+	rootCABytes, err := ioutil.ReadFile(rootCA)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read root-ca: %v", err)
 	}
@@ -489,7 +488,7 @@ func get(ctx context.Context, client *http.Client, apiURL string, v interface{})
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
+		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			return "", fmt.Errorf("github: read body: %v", err)
 		}

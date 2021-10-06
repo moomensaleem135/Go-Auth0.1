@@ -20,9 +20,9 @@ type DeviceTokenDelete struct {
 	mutation *DeviceTokenMutation
 }
 
-// Where appends a list predicates to the DeviceTokenDelete builder.
+// Where adds a new predicate to the DeviceTokenDelete builder.
 func (dtd *DeviceTokenDelete) Where(ps ...predicate.DeviceToken) *DeviceTokenDelete {
-	dtd.mutation.Where(ps...)
+	dtd.mutation.predicates = append(dtd.mutation.predicates, ps...)
 	return dtd
 }
 
@@ -46,9 +46,6 @@ func (dtd *DeviceTokenDelete) Exec(ctx context.Context) (int, error) {
 			return affected, err
 		})
 		for i := len(dtd.hooks) - 1; i >= 0; i-- {
-			if dtd.hooks[i] == nil {
-				return 0, fmt.Errorf("db: uninitialized hook (forgotten import db/runtime?)")
-			}
 			mut = dtd.hooks[i](mut)
 		}
 		if _, err := mut.Mutate(ctx, dtd.mutation); err != nil {
