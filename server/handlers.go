@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"net/http"
 	"net/url"
 	"path"
@@ -95,7 +94,6 @@ func (s *Server) discoveryHandler() (http.HandlerFunc, error) {
 		UserInfo:          s.absURL("/userinfo"),
 		DeviceEndpoint:    s.absURL("/device/code"),
 		Subjects:          []string{"public"},
-		GrantTypes:        []string{grantTypeAuthorizationCode, grantTypeRefreshToken, grantTypeDeviceCode},
 		IDTokenAlgs:       []string{string(jose.RS256)},
 		CodeChallengeAlgs: []string{codeChallengeMethodS256, codeChallengeMethodPlain},
 		Scopes:            []string{"openid", "email", "groups", "profile", "offline_access"},
@@ -110,6 +108,8 @@ func (s *Server) discoveryHandler() (http.HandlerFunc, error) {
 		d.ResponseTypes = append(d.ResponseTypes, responseType)
 	}
 	sort.Strings(d.ResponseTypes)
+
+	d.GrantTypes = s.supportedGrantTypes
 
 	data, err := json.MarshalIndent(d, "", "  ")
 	if err != nil {
@@ -154,7 +154,7 @@ func (s *Server) handleAuthorization(w http.ResponseWriter, r *http.Request) {
 	if connectorID != "" {
 		for _, c := range connectors {
 			if c.ID == connectorID {
-				connURL.Path = s.absPath("/auth", url.PathEscape(c.ID))
+				connURL.Path = s.absPath("/auth", c.ID)
 				http.Redirect(w, r, connURL.String(), http.StatusFound)
 				return
 			}
@@ -164,18 +164,18 @@ func (s *Server) handleAuthorization(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(connectors) == 1 && !s.alwaysShowLogin {
-		connURL.Path = s.absPath("/auth", url.PathEscape(connectors[0].ID))
+		connURL.Path = s.absPath("/auth", connectors[0].ID)
 		http.Redirect(w, r, connURL.String(), http.StatusFound)
 	}
 
 	connectorInfos := make([]connectorInfo, len(connectors))
 	for index, conn := range connectors {
-		connURL.Path = s.absPath("/auth", url.PathEscape(conn.ID))
+		connURL.Path = s.absPath("/auth", conn.ID)
 		connectorInfos[index] = connectorInfo{
 			ID:   conn.ID,
 			Name: conn.Name,
 			Type: conn.Type,
-			URL:  template.URL(connURL.String()),
+			URL:  connURL.String(),
 		}
 	}
 
@@ -201,13 +201,7 @@ func (s *Server) handleConnectorLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	connID, err := url.PathUnescape(mux.Vars(r)["connector"])
-	if err != nil {
-		s.logger.Errorf("Failed to parse connector: %v", err)
-		s.renderError(r, w, http.StatusBadRequest, "Requested resource does not exist")
-		return
-	}
-
+	connID := mux.Vars(r)["connector"]
 	conn, err := s.getConnector(connID)
 	if err != nil {
 		s.logger.Errorf("Failed to get connector: %v", err)
@@ -323,12 +317,7 @@ func (s *Server) handlePasswordLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	connID, err := url.PathUnescape(mux.Vars(r)["connector"])
-	if err != nil {
-		s.logger.Errorf("Failed to parse connector: %v", err)
-		s.renderError(r, w, http.StatusBadRequest, "Requested resource does not exist")
-		return
-	} else if connID != "" && connID != authReq.ConnectorID {
+	if connID := mux.Vars(r)["connector"]; connID != "" && connID != authReq.ConnectorID {
 		s.logger.Errorf("Connector mismatch: authentication started with id %q, but password login for id %q was triggered", authReq.ConnectorID, connID)
 		s.renderError(r, w, http.StatusInternalServerError, "Requested resource does not exist.")
 		return
@@ -413,12 +402,7 @@ func (s *Server) handleConnectorCallback(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	connID, err := url.PathUnescape(mux.Vars(r)["connector"])
-	if err != nil {
-		s.logger.Errorf("Failed to get connector with id %q : %v", authReq.ConnectorID, err)
-		s.renderError(r, w, http.StatusInternalServerError, "Requested resource does not exist.")
-		return
-	} else if connID != "" && connID != authReq.ConnectorID {
+	if connID := mux.Vars(r)["connector"]; connID != "" && connID != authReq.ConnectorID {
 		s.logger.Errorf("Connector mismatch: authentication started with id %q, but callback for id %q was triggered", authReq.ConnectorID, connID)
 		s.renderError(r, w, http.StatusInternalServerError, "Requested resource does not exist.")
 		return
