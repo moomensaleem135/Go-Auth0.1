@@ -262,7 +262,7 @@ func TestRetryOnConflict(t *testing.T) {
 		{
 			"Timeout reached",
 			func() error { err := httpErr{status: 409}; return error(&err) },
-			"maximum timeout reached while retrying a conflicted request:   Conflict: response from server \"\"",
+			"maximum timeout reached while retrying a conflicted request",
 		},
 		{
 			"HTTP Error",
