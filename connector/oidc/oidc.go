@@ -44,11 +44,6 @@ type Config struct {
 	// InsecureEnableGroups enables groups claims. This is disabled by default until https://github.com/dexidp/dex/issues/1065 is resolved
 	InsecureEnableGroups bool `json:"insecureEnableGroups"`
 
-	// AcrValues (Authentication Context Class Reference Values) that specifies the Authentication Context Class Values
-	// within the Authentication Request that the Authorization Server is being requested to use for
-	// processing requests from this Client, with the values appearing in order of preference.
-	AcrValues []string `json:"acrValues"`
-
 	// GetUserInfo uses the userinfo endpoint to get additional claims for
 	// the token. This is especially useful where upstreams return "thin"
 	// id tokens
@@ -159,7 +154,6 @@ func (c *Config) Open(id string, logger log.Logger) (conn connector.Connector, e
 		hostedDomains:             c.HostedDomains,
 		insecureSkipEmailVerified: c.InsecureSkipEmailVerified,
 		insecureEnableGroups:      c.InsecureEnableGroups,
-		acrValues:                 c.AcrValues,
 		getUserInfo:               c.GetUserInfo,
 		promptType:                c.PromptType,
 		userIDKey:                 c.UserIDKey,
@@ -186,7 +180,6 @@ type oidcConnector struct {
 	hostedDomains             []string
 	insecureSkipEmailVerified bool
 	insecureEnableGroups      bool
-	acrValues                 []string
 	getUserInfo               bool
 	promptType                string
 	userIDKey                 string
@@ -214,11 +207,6 @@ func (c *oidcConnector) LoginURL(s connector.Scopes, callbackURL, state string) 
 			preferredDomain = "*"
 		}
 		opts = append(opts, oauth2.SetAuthURLParam("hd", preferredDomain))
-	}
-
-	if len(c.acrValues) > 0 {
-		acrValues := strings.Join(c.acrValues, " ")
-		opts = append(opts, oauth2.SetAuthURLParam("acr_values", acrValues))
 	}
 
 	if s.OfflineAccess {

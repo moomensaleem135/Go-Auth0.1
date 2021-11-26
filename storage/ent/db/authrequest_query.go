@@ -106,7 +106,7 @@ func (arq *AuthRequestQuery) FirstIDX(ctx context.Context) string {
 }
 
 // Only returns a single AuthRequest entity found by the query, ensuring it only returns one.
-// Returns a *NotSingularError when more than one AuthRequest entity is found.
+// Returns a *NotSingularError when exactly one AuthRequest entity is not found.
 // Returns a *NotFoundError when no AuthRequest entities are found.
 func (arq *AuthRequestQuery) Only(ctx context.Context) (*AuthRequest, error) {
 	nodes, err := arq.Limit(2).All(ctx)
@@ -133,7 +133,7 @@ func (arq *AuthRequestQuery) OnlyX(ctx context.Context) *AuthRequest {
 }
 
 // OnlyID is like Only, but returns the only AuthRequest ID in the query.
-// Returns a *NotSingularError when more than one AuthRequest ID is found.
+// Returns a *NotSingularError when exactly one AuthRequest ID is not found.
 // Returns a *NotFoundError when no entities are found.
 func (arq *AuthRequestQuery) OnlyID(ctx context.Context) (id string, err error) {
 	var ids []string
@@ -242,9 +242,8 @@ func (arq *AuthRequestQuery) Clone() *AuthRequestQuery {
 		order:      append([]OrderFunc{}, arq.order...),
 		predicates: append([]predicate.AuthRequest{}, arq.predicates...),
 		// clone intermediate query.
-		sql:    arq.sql.Clone(),
-		path:   arq.path,
-		unique: arq.unique,
+		sql:  arq.sql.Clone(),
+		path: arq.path,
 	}
 }
 
@@ -337,10 +336,6 @@ func (arq *AuthRequestQuery) sqlAll(ctx context.Context) ([]*AuthRequest, error)
 
 func (arq *AuthRequestQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := arq.querySpec()
-	_spec.Node.Columns = arq.fields
-	if len(arq.fields) > 0 {
-		_spec.Unique = arq.unique != nil && *arq.unique
-	}
 	return sqlgraph.CountNodes(ctx, arq.driver, _spec)
 }
 
@@ -411,9 +406,6 @@ func (arq *AuthRequestQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	if arq.sql != nil {
 		selector = arq.sql
 		selector.Select(selector.Columns(columns...)...)
-	}
-	if arq.unique != nil && *arq.unique {
-		selector.Distinct()
 	}
 	for _, p := range arq.predicates {
 		p(selector)
@@ -693,7 +685,9 @@ func (argb *AuthRequestGroupBy) sqlQuery() *sql.Selector {
 		for _, f := range argb.fields {
 			columns = append(columns, selector.C(f))
 		}
-		columns = append(columns, aggregation...)
+		for _, c := range aggregation {
+			columns = append(columns, c)
+		}
 		selector.Select(columns...)
 	}
 	return selector.GroupBy(selector.Columns(argb.fields...)...)

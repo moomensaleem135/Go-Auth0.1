@@ -4,7 +4,6 @@ package db
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -684,7 +683,7 @@ func (aruo *AuthRequestUpdateOne) sqlSave(ctx context.Context) (_node *AuthReque
 	}
 	id, ok := aruo.mutation.ID()
 	if !ok {
-		return nil, &ValidationError{Name: "id", err: errors.New(`db: missing "AuthRequest.id" for update`)}
+		return nil, &ValidationError{Name: "ID", err: fmt.Errorf("missing AuthRequest.ID for update")}
 	}
 	_spec.Node.ID.Value = id
 	if fields := aruo.fields; len(fields) > 0 {

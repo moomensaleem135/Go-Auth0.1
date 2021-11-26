@@ -4,7 +4,6 @@ package db
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"entgo.io/ent/dialect/sql"
@@ -120,17 +119,17 @@ func (pu *PasswordUpdate) ExecX(ctx context.Context) {
 func (pu *PasswordUpdate) check() error {
 	if v, ok := pu.mutation.Email(); ok {
 		if err := password.EmailValidator(v); err != nil {
-			return &ValidationError{Name: "email", err: fmt.Errorf(`db: validator failed for field "Password.email": %w`, err)}
+			return &ValidationError{Name: "email", err: fmt.Errorf("db: validator failed for field \"email\": %w", err)}
 		}
 	}
 	if v, ok := pu.mutation.Username(); ok {
 		if err := password.UsernameValidator(v); err != nil {
-			return &ValidationError{Name: "username", err: fmt.Errorf(`db: validator failed for field "Password.username": %w`, err)}
+			return &ValidationError{Name: "username", err: fmt.Errorf("db: validator failed for field \"username\": %w", err)}
 		}
 	}
 	if v, ok := pu.mutation.UserID(); ok {
 		if err := password.UserIDValidator(v); err != nil {
-			return &ValidationError{Name: "user_id", err: fmt.Errorf(`db: validator failed for field "Password.user_id": %w`, err)}
+			return &ValidationError{Name: "user_id", err: fmt.Errorf("db: validator failed for field \"user_id\": %w", err)}
 		}
 	}
 	return nil
@@ -301,17 +300,17 @@ func (puo *PasswordUpdateOne) ExecX(ctx context.Context) {
 func (puo *PasswordUpdateOne) check() error {
 	if v, ok := puo.mutation.Email(); ok {
 		if err := password.EmailValidator(v); err != nil {
-			return &ValidationError{Name: "email", err: fmt.Errorf(`db: validator failed for field "Password.email": %w`, err)}
+			return &ValidationError{Name: "email", err: fmt.Errorf("db: validator failed for field \"email\": %w", err)}
 		}
 	}
 	if v, ok := puo.mutation.Username(); ok {
 		if err := password.UsernameValidator(v); err != nil {
-			return &ValidationError{Name: "username", err: fmt.Errorf(`db: validator failed for field "Password.username": %w`, err)}
+			return &ValidationError{Name: "username", err: fmt.Errorf("db: validator failed for field \"username\": %w", err)}
 		}
 	}
 	if v, ok := puo.mutation.UserID(); ok {
 		if err := password.UserIDValidator(v); err != nil {
-			return &ValidationError{Name: "user_id", err: fmt.Errorf(`db: validator failed for field "Password.user_id": %w`, err)}
+			return &ValidationError{Name: "user_id", err: fmt.Errorf("db: validator failed for field \"user_id\": %w", err)}
 		}
 	}
 	return nil
@@ -330,7 +329,7 @@ func (puo *PasswordUpdateOne) sqlSave(ctx context.Context) (_node *Password, err
 	}
 	id, ok := puo.mutation.ID()
 	if !ok {
-		return nil, &ValidationError{Name: "id", err: errors.New(`db: missing "Password.id" for update`)}
+		return nil, &ValidationError{Name: "ID", err: fmt.Errorf("missing Password.ID for update")}
 	}
 	_spec.Node.ID.Value = id
 	if fields := puo.fields; len(fields) > 0 {
