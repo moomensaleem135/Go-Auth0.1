@@ -21,11 +21,6 @@ import (
 	"github.com/dexidp/dex/storage/kubernetes/k8sapi"
 )
 
-const (
-	wellKnownURLPath = "/.well-known/oauth-authorization-server"
-	usersURLPath     = "/apis/user.openshift.io/v1/users/~"
-)
-
 // Config holds configuration options for OpenShift login
 type Config struct {
 	Issuer       string   `json:"issuer"`
@@ -38,7 +33,6 @@ type Config struct {
 }
 
 var _ connector.CallbackConnector = (*openshiftConnector)(nil)
-var _ connector.RefreshConnector = (*openshiftConnector)(nil)
 
 type openshiftConnector struct {
 	apiURL       string
@@ -67,7 +61,7 @@ type user struct {
 func (c *Config) Open(id string, logger log.Logger) (conn connector.Connector, err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	wellKnownURL := strings.TrimSuffix(c.Issuer, "/") + wellKnownURLPath
+	wellKnownURL := strings.TrimSuffix(c.Issuer, "/") + "/.well-known/oauth-authorization-server"
 	req, err := http.NewRequest(http.MethodGet, wellKnownURL, nil)
 
 	openshiftConnector := openshiftConnector{
@@ -160,23 +154,8 @@ func (c *openshiftConnector) HandleCallback(s connector.Scopes, r *http.Request)
 		return identity, fmt.Errorf("oidc: failed to get token: %v", err)
 	}
 
-	return c.identity(ctx, s, token)
-}
-
-func (c *openshiftConnector) Refresh(ctx context.Context, s connector.Scopes, oldID connector.Identity) (connector.Identity, error) {
-	var token oauth2.Token
-	err := json.Unmarshal(oldID.ConnectorData, &token)
-	if err != nil {
-		return connector.Identity{}, fmt.Errorf("parsing token: %w", err)
-	}
-	if c.httpClient != nil {
-		ctx = context.WithValue(ctx, oauth2.HTTPClient, c.httpClient)
-	}
-	return c.identity(ctx, s, &token)
-}
-
-func (c *openshiftConnector) identity(ctx context.Context, s connector.Scopes, token *oauth2.Token) (identity connector.Identity, err error) {
 	client := c.oauth2Config.Client(ctx, token)
+
 	user, err := c.user(ctx, client)
 	if err != nil {
 		return identity, fmt.Errorf("openshift: get user: %v", err)
@@ -198,20 +177,12 @@ func (c *openshiftConnector) identity(ctx context.Context, s connector.Scopes, t
 		Groups:            user.Groups,
 	}
 
-	if s.OfflineAccess {
-		connData, err := json.Marshal(token)
-		if err != nil {
-			return identity, fmt.Errorf("marshal connector data: %v", err)
-		}
-		identity.ConnectorData = connData
-	}
-
 	return identity, nil
 }
 
 // user function returns the OpenShift user associated with the authenticated user
 func (c *openshiftConnector) user(ctx context.Context, client *http.Client) (u user, err error) {
-	url := c.apiURL + usersURLPath
+	url := c.apiURL + "/apis/user.openshift.io/v1/users/~"
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
