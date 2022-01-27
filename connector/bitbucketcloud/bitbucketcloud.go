@@ -351,7 +351,7 @@ func (b *bitbucketConnector) userEmail(ctx context.Context, client *http.Client)
 
 // getGroups retrieves Bitbucket teams a user is in, if any.
 func (b *bitbucketConnector) getGroups(ctx context.Context, client *http.Client, groupScope bool, userLogin string) ([]string, error) {
-	bitbucketTeams, err := b.userWorkspaces(ctx, client)
+	bitbucketTeams, err := b.userTeams(ctx, client)
 	if err != nil {
 		return nil, err
 	}
@@ -369,33 +369,33 @@ func (b *bitbucketConnector) getGroups(ctx context.Context, client *http.Client,
 	return nil, nil
 }
 
-type workspaceSlug struct {
-	Slug string `json:"slug"`
+type teamName struct {
+	Name string `json:"username"` // The "username" from Bitbucket Cloud is actually the team name here
 }
 
-type workspace struct {
-	Workspace workspaceSlug `json:"workspace"`
+type team struct {
+	Team teamName `json:"team"`
 }
 
-type userWorkspacesResponse struct {
+type userTeamsResponse struct {
 	pagedResponse
-	Values []workspace `json:"values"`
+	Values []team
 }
 
-func (b *bitbucketConnector) userWorkspaces(ctx context.Context, client *http.Client) ([]string, error) {
+func (b *bitbucketConnector) userTeams(ctx context.Context, client *http.Client) ([]string, error) {
 	var teams []string
-	apiURL := b.apiURL + "/user/permissions/workspaces"
+	apiURL := b.apiURL + "/user/permissions/teams"
 
 	for {
-		// https://developer.atlassian.com/cloud/bitbucket/rest/api-group-workspaces/#api-workspaces-get
-		var response userWorkspacesResponse
+		// https://developer.atlassian.com/bitbucket/api/2/reference/resource/user/permissions/teams
+		var response userTeamsResponse
 
 		if err := get(ctx, client, apiURL, &response); err != nil {
 			return nil, fmt.Errorf("bitbucket: get user teams: %v", err)
 		}
 
 		for _, value := range response.Values {
-			teams = append(teams, value.Workspace.Slug)
+			teams = append(teams, value.Team.Name)
 		}
 
 		if response.Next == nil {
