@@ -13,14 +13,9 @@ import (
 )
 
 // Config holds the configuration parameters for a connector which returns an
-// identity with the HTTP header X-Remote-User as verified email,
-// X-Remote-Group and configured staticGroups as user's group.
-// Headers retrieved to fetch user's email and group can be configured
-// with userHeader and groupHeader.
+// identity with the HTTP header X-Remote-User as verified email.
 type Config struct {
-	UserHeader  string   `json:"userHeader"`
-	GroupHeader string   `json:"groupHeader"`
-	Groups      []string `json:"staticGroups"`
+	UserHeader string `json:"userHeader"`
 }
 
 // Open returns an authentication strategy which requires no user interaction.
@@ -29,22 +24,16 @@ func (c *Config) Open(id string, logger log.Logger) (connector.Connector, error)
 	if userHeader == "" {
 		userHeader = "X-Remote-User"
 	}
-	groupHeader := c.GroupHeader
-	if groupHeader == "" {
-		groupHeader = "X-Remote-Group"
-	}
 
-	return &callback{userHeader: userHeader, groupHeader: groupHeader, logger: logger, pathSuffix: "/" + id, groups: c.Groups}, nil
+	return &callback{userHeader: userHeader, logger: logger, pathSuffix: "/" + id}, nil
 }
 
 // Callback is a connector which returns an identity with the HTTP header
 // X-Remote-User as verified email.
 type callback struct {
-	userHeader  string
-	groupHeader string
-	groups      []string
-	logger      log.Logger
-	pathSuffix  string
+	userHeader string
+	logger     log.Logger
+	pathSuffix string
 }
 
 // LoginURL returns the URL to redirect the user to login with.
@@ -66,15 +55,11 @@ func (m *callback) HandleCallback(s connector.Scopes, r *http.Request) (connecto
 	if remoteUser == "" {
 		return connector.Identity{}, fmt.Errorf("required HTTP header %s is not set", m.userHeader)
 	}
-	groups := m.groups
-	headerGroup := r.Header.Get(m.groupHeader)
-	if headerGroup != "" {
-		groups = append(groups, headerGroup)
-	}
+	// TODO: add support for X-Remote-Group, see
+	// https://kubernetes.io/docs/admin/authentication/#authenticating-proxy
 	return connector.Identity{
 		UserID:        remoteUser, // TODO: figure out if this is a bad ID value.
 		Email:         remoteUser,
 		EmailVerified: true,
-		Groups:        groups,
 	}, nil
 }
