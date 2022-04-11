@@ -1,5 +1,5 @@
 run:
-    timeout: 4m
+    timeout: 2m
 
 linters-settings:
     depguard:
