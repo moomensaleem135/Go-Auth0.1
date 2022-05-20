@@ -15,7 +15,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path"
 	"strconv"
@@ -83,8 +82,7 @@ func offlineTokenName(userID string, connID string, h func() hash.Hash) string {
 	return strings.TrimRight(encoding.EncodeToString(hash.Sum(nil)), "=")
 }
 
-func (cli *client) urlForWithParams(
-	apiVersion, namespace, resource, name string, params url.Values) string {
+func (cli *client) urlFor(apiVersion, namespace, resource, name string) string {
 	basePath := "apis/"
 	if apiVersion == "v1" {
 		basePath = "api/"
@@ -99,19 +97,7 @@ func (cli *client) urlForWithParams(
 	if strings.HasSuffix(cli.baseURL, "/") {
 		return cli.baseURL + p
 	}
-
-	r := cli.baseURL + "/" + p
-
-	encodedParams := params.Encode()
-	if len(encodedParams) > 0 {
-		return r + "?" + encodedParams
-	}
-
-	return r
-}
-
-func (cli *client) urlFor(apiVersion, namespace, resource, name string) string {
-	return cli.urlForWithParams(apiVersion, namespace, resource, name, url.Values{})
+	return cli.baseURL + "/" + p
 }
 
 // Define an error interface so we can get at the underlying status code if it's
@@ -177,7 +163,8 @@ func (cli *client) get(resource, name string, v interface{}) error {
 	return cli.getResource(cli.apiVersion, cli.namespace, resource, name, v)
 }
 
-func (cli *client) getUrl(url string, v interface{}) error {
+func (cli *client) getResource(apiVersion, namespace, resource, name string, v interface{}) error {
+	url := cli.urlFor(apiVersion, namespace, resource, name)
 	resp, err := cli.client.Get(url)
 	if err != nil {
 		return err
@@ -189,19 +176,8 @@ func (cli *client) getUrl(url string, v interface{}) error {
 	return json.NewDecoder(resp.Body).Decode(v)
 }
 
-func (cli *client) getResource(apiVersion, namespace, resource, name string, v interface{}) error {
-	return cli.getUrl(cli.urlFor(apiVersion, namespace, resource, name), v)
-}
-
-func (cli *client) listN(resource string, v interface{}, n int) error {
-	params := url.Values{}
-	params.Add("limit", fmt.Sprintf("%d", n))
-	u := cli.urlForWithParams(cli.apiVersion, cli.namespace, resource, "", params)
-	return cli.getUrl(u, v)
-}
-
 func (cli *client) list(resource string, v interface{}) error {
-	return cli.listN(resource, v, -1)
+	return cli.get(resource, "", v)
 }
 
 func (cli *client) post(resource string, v interface{}) error {
