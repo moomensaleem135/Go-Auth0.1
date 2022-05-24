@@ -11,6 +11,7 @@ type keyPair struct {
 
 // keys are generated beforehand so we don't have to generate RSA keys for every test.
 var jsonWebKeys = []keyPair{
+
 	{
 		Public: mustLoadJWK(`{
 			"use": "sig",

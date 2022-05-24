@@ -13,7 +13,9 @@ import (
 
 	entSQL "entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/schema"
-	_ "github.com/lib/pq" // Register postgres driver.
+
+	// Register postgres driver.
+	_ "github.com/lib/pq"
 
 	"github.com/dexidp/dex/pkg/log"
 	"github.com/dexidp/dex/storage"

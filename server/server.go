@@ -320,7 +320,7 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 		}
 	}
 
-	r := mux.NewRouter().SkipClean(true).UseEncodedPath()
+	r := mux.NewRouter()
 	handle := func(p string, h http.Handler) {
 		r.Handle(path.Join(issuerURL.Path, p), instrumentHandlerCounter(p, h))
 	}

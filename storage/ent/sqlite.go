@@ -7,7 +7,9 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/schema"
-	_ "github.com/mattn/go-sqlite3" // Register sqlite driver.
+
+	// Register sqlite driver.
+	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/dexidp/dex/pkg/log"
 	"github.com/dexidp/dex/storage"
