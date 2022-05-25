@@ -14,7 +14,10 @@ import (
 
 	entSQL "entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/schema"
-	"github.com/go-sql-driver/mysql" // Register mysql driver.
+	"github.com/go-sql-driver/mysql"
+
+	// Register postgres driver.
+	_ "github.com/lib/pq"
 
 	"github.com/dexidp/dex/pkg/log"
 	"github.com/dexidp/dex/storage"
