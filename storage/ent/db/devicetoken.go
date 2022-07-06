@@ -28,10 +28,6 @@ type DeviceToken struct {
 	LastRequest time.Time `json:"last_request,omitempty"`
 	// PollInterval holds the value of the "poll_interval" field.
 	PollInterval int `json:"poll_interval,omitempty"`
-	// CodeChallenge holds the value of the "code_challenge" field.
-	CodeChallenge string `json:"code_challenge,omitempty"`
-	// CodeChallengeMethod holds the value of the "code_challenge_method" field.
-	CodeChallengeMethod string `json:"code_challenge_method,omitempty"`
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -43,7 +39,7 @@ func (*DeviceToken) scanValues(columns []string) ([]interface{}, error) {
 			values[i] = new([]byte)
 		case devicetoken.FieldID, devicetoken.FieldPollInterval:
 			values[i] = new(sql.NullInt64)
-		case devicetoken.FieldDeviceCode, devicetoken.FieldStatus, devicetoken.FieldCodeChallenge, devicetoken.FieldCodeChallengeMethod:
+		case devicetoken.FieldDeviceCode, devicetoken.FieldStatus:
 			values[i] = new(sql.NullString)
 		case devicetoken.FieldExpiry, devicetoken.FieldLastRequest:
 			values[i] = new(sql.NullTime)
@@ -104,18 +100,6 @@ func (dt *DeviceToken) assignValues(columns []string, values []interface{}) erro
 			} else if value.Valid {
 				dt.PollInterval = int(value.Int64)
 			}
-		case devicetoken.FieldCodeChallenge:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field code_challenge", values[i])
-			} else if value.Valid {
-				dt.CodeChallenge = value.String
-			}
-		case devicetoken.FieldCodeChallengeMethod:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field code_challenge_method", values[i])
-			} else if value.Valid {
-				dt.CodeChallengeMethod = value.String
-			}
 		}
 	}
 	return nil
@@ -158,10 +142,6 @@ func (dt *DeviceToken) String() string {
 	builder.WriteString(dt.LastRequest.Format(time.ANSIC))
 	builder.WriteString(", poll_interval=")
 	builder.WriteString(fmt.Sprintf("%v", dt.PollInterval))
-	builder.WriteString(", code_challenge=")
-	builder.WriteString(dt.CodeChallenge)
-	builder.WriteString(", code_challenge_method=")
-	builder.WriteString(dt.CodeChallengeMethod)
 	builder.WriteByte(')')
 	return builder.String()
 }
