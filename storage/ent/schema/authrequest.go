@@ -27,8 +27,7 @@ create table auth_request
     expiry                    timestamp not null,
     claims_preferred_username text default '' not null,
     code_challenge            text default '' not null,
-    code_challenge_method     text default '' not null,
-    hmac_key                  blob
+    code_challenge_method     text default '' not null
 );
 */
 
@@ -87,7 +86,6 @@ func (AuthRequest) Fields() []ent.Field {
 		field.Text("code_challenge_method").
 			SchemaType(textSchema).
 			Default(""),
-		field.Bytes("hmac_key"),
 	}
 }
 
