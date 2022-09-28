@@ -45,8 +45,6 @@ const (
 	FieldCodeChallenge = "code_challenge"
 	// FieldCodeChallengeMethod holds the string denoting the code_challenge_method field in the database.
 	FieldCodeChallengeMethod = "code_challenge_method"
-	// FieldHmacKey holds the string denoting the hmac_key field in the database.
-	FieldHmacKey = "hmac_key"
 	// Table holds the table name of the authrequest in the database.
 	Table = "auth_requests"
 )
@@ -73,7 +71,6 @@ var Columns = []string{
 	FieldExpiry,
 	FieldCodeChallenge,
 	FieldCodeChallengeMethod,
-	FieldHmacKey,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).

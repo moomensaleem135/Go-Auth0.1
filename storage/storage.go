@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"crypto"
 	"crypto/rand"
 	"encoding/base32"
 	"errors"
@@ -46,11 +45,6 @@ func newSecureID(len int) string {
 	}
 	// Avoid the identifier to begin with number and trim padding
 	return string(buff[0]%26+'a') + strings.TrimRight(encoding.EncodeToString(buff[1:]), "=")
-}
-
-// NewHMACKey returns a random key which can be used in the computation of an HMAC
-func NewHMACKey(h crypto.Hash) []byte {
-	return []byte(newSecureID(h.Size()))
 }
 
 // GCResult returns the number of objects deleted by garbage collection.
@@ -229,9 +223,6 @@ type AuthRequest struct {
 
 	// PKCE CodeChallenge and CodeChallengeMethod
 	PKCE PKCE
-
-	// HMACKey is used when generating an AuthRequest-specific HMAC
-	HMACKey []byte
 }
 
 // AuthCode represents a code which can be exchanged for an OAuth2 token response.

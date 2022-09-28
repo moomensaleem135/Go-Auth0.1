@@ -291,11 +291,4 @@ var migrations = []migration{
 				add column code_challenge_method text not null default '';`,
 		},
 	},
-	{
-		stmts: []string{
-			`
-			alter table auth_request
-				add column hmac_key bytea;`,
-		},
-	},
 }

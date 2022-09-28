@@ -45,7 +45,6 @@ func toStorageAuthRequest(a *db.AuthRequest) storage.AuthRequest {
 			CodeChallenge:       a.CodeChallenge,
 			CodeChallengeMethod: a.CodeChallengeMethod,
 		},
-		HMACKey: a.HmacKey,
 	}
 }
 

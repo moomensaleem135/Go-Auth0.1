@@ -31,7 +31,6 @@ func (d *Database) CreateAuthRequest(authRequest storage.AuthRequest) error {
 		SetExpiry(authRequest.Expiry.UTC()).
 		SetConnectorID(authRequest.ConnectorID).
 		SetConnectorData(authRequest.ConnectorData).
-		SetHmacKey(authRequest.HMACKey).
 		Save(context.TODO())
 	if err != nil {
 		return convertDBError("create auth request: %w", err)
@@ -95,7 +94,6 @@ func (d *Database) UpdateAuthRequest(id string, updater func(old storage.AuthReq
 		SetExpiry(newAuthRequest.Expiry.UTC()).
 		SetConnectorID(newAuthRequest.ConnectorID).
 		SetConnectorData(newAuthRequest.ConnectorData).
-		SetHmacKey(newAuthRequest.HMACKey).
 		Save(context.TODO())
 	if err != nil {
 		return rollback(tx, "update auth request uploading: %w", err)

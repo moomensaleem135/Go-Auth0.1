@@ -356,8 +356,6 @@ type AuthRequest struct {
 
 	CodeChallenge       string `json:"code_challenge,omitempty"`
 	CodeChallengeMethod string `json:"code_challenge_method,omitempty"`
-
-	HMACKey []byte `json:"hmac_key"`
 }
 
 // AuthRequestList is a list of AuthRequests.
@@ -386,7 +384,6 @@ func toStorageAuthRequest(req AuthRequest) storage.AuthRequest {
 			CodeChallenge:       req.CodeChallenge,
 			CodeChallengeMethod: req.CodeChallengeMethod,
 		},
-		HMACKey: req.HMACKey,
 	}
 	return a
 }
@@ -415,7 +412,6 @@ func (cli *client) fromStorageAuthRequest(a storage.AuthRequest) AuthRequest {
 		Claims:              fromStorageClaims(a.Claims),
 		CodeChallenge:       a.PKCE.CodeChallenge,
 		CodeChallengeMethod: a.PKCE.CodeChallengeMethod,
-		HMACKey:             a.HMACKey,
 	}
 	return req
 }
