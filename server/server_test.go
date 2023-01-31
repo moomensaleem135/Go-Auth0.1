@@ -98,7 +98,6 @@ func newTestServer(ctx context.Context, t *testing.T, updateConfig func(c *Confi
 		Logger:             logger,
 		PrometheusRegistry: prometheus.NewRegistry(),
 		HealthChecker:      gosundheit.New(),
-		SkipApprovalScreen: true, // Don't prompt for approval, just immediately redirect with code.
 	}
 	if updateConfig != nil {
 		updateConfig(&config)
@@ -119,6 +118,7 @@ func newTestServer(ctx context.Context, t *testing.T, updateConfig func(c *Confi
 	if server, err = newServer(ctx, config, staticRotationStrategy(testKey)); err != nil {
 		t.Fatal(err)
 	}
+	server.skipApproval = true // Don't prompt for approval, just immediately redirect with code.
 
 	// Default rotation policy
 	if server.refreshTokenPolicy == nil {
