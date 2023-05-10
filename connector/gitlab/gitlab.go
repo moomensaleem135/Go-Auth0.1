@@ -1,4 +1,4 @@
-// Package gitlab provides authentication strategies using GitLab.
+// Package gitlab provides authentication strategies using Gitlab.
 package gitlab
 
 import (
