@@ -277,7 +277,7 @@ func TestGroupFilter(t *testing.T) {
 	c.GroupSearch.BaseDN = "ou=TestGroupFilter,dc=example,dc=org"
 	c.GroupSearch.UserMatchers = []UserMatcher{
 		{
-			UserAttr:  "dn",
+			UserAttr:  "DN",
 			GroupAttr: "member",
 		},
 	}
