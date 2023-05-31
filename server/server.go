@@ -218,9 +218,9 @@ func newServer(ctx context.Context, c Config, rotationStrategy rotationStrategy)
 
 	for _, respType := range c.SupportedResponseTypes {
 		switch respType {
-		case responseTypeCode, responseTypeIDToken, responseTypeCodeIDToken:
+		case responseTypeCode, responseTypeIDToken:
 			// continue
-		case responseTypeToken, responseTypeCodeToken, responseTypeIDTokenToken, responseTypeCodeIDTokenToken:
+		case responseTypeToken:
 			// response_type=token is an implicit flow, let's add it to the discovery info
 			// https://datatracker.ietf.org/doc/html/rfc6749#section-4.2.1
 			supportedGrant = append(supportedGrant, grantTypeImplicit)
