@@ -62,7 +62,6 @@ func TestHandleCallback(t *testing.T) {
 		expectPreferredUsername   string
 		expectedEmailField        string
 		token                     map[string]interface{}
-		newGroupsFromClaims       []NewGroupsFromClaims
 	}{
 		{
 			name:               "simpleCase",
@@ -289,68 +288,6 @@ func TestHandleCallback(t *testing.T) {
 				"email_verified": true,
 			},
 		},
-		{
-			name:               "concatinateClaim",
-			userIDKey:          "", // not configured
-			userNameKey:        "", // not configured
-			expectUserID:       "subvalue",
-			expectUserName:     "namevalue",
-			expectGroups:       []string{"group1", "gh::acme::pipeline-one", "tfe-acme-foobar", "bk-emailvalue"},
-			expectedEmailField: "emailvalue",
-			newGroupsFromClaims: []NewGroupsFromClaims{
-				{ // The basic functionality, should create "gh::acme::pipeline-one".
-					ClaimList: []string{
-						"organization",
-						"pipeline",
-					},
-					Delimiter: "::",
-					Prefix:    "gh",
-				},
-				{ // Non existing claims, should not generate any any new group claim.
-					ClaimList: []string{
-						"non-existing1",
-						"non-existing2",
-					},
-					Delimiter: "::",
-					Prefix:    "tfe",
-				},
-				{ // In this case the delimiter character("-") should be removed removed from "claim-with-delimiter" claim to ensure the resulting
-					// claim structure is in full control of the Dex operator and not the person creating a new pipeline.
-					// Should create "tfe-acme-foobar" and not "tfe-acme-foo-bar".
-					ClaimList: []string{
-						"organization",
-						"claim-with-delimiter",
-					},
-					Delimiter: "-",
-					Prefix:    "tfe",
-				},
-				{ // Ignore non string claims (like arrays), this should result in "bk-emailvalue".
-					ClaimList: []string{
-						"non-string-claim",
-						"non-string-claim2",
-						"email",
-					},
-					Delimiter: "-",
-					Prefix:    "bk",
-				},
-			},
-
-			token: map[string]interface{}{
-				"sub":                  "subvalue",
-				"name":                 "namevalue",
-				"groups":               "group1",
-				"organization":         "acme",
-				"pipeline":             "pipeline-one",
-				"email":                "emailvalue",
-				"email_verified":       true,
-				"claim-with-delimiter": "foo-bar",
-				"non-string-claim": []string{
-					"element1",
-					"element2",
-				},
-				"non-string-claim2": 666,
-			},
-		},
 	}
 
 	for _, tc := range tests {
@@ -386,7 +323,6 @@ func TestHandleCallback(t *testing.T) {
 			config.ClaimMapping.PreferredUsernameKey = tc.preferredUsernameKey
 			config.ClaimMapping.EmailKey = tc.emailKey
 			config.ClaimMapping.GroupsKey = tc.groupsKey
-			config.ClaimModifications.NewGroupsFromClaims = tc.newGroupsFromClaims
 
 			conn, err := newConnector(config)
 			if err != nil {
