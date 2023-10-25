@@ -901,15 +901,32 @@ func CodeChallengeMethodContainsFold(v string) predicate.AuthCode {
 
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.AuthCode) predicate.AuthCode {
-	return predicate.AuthCode(sql.AndPredicates(predicates...))
+	return predicate.AuthCode(func(s *sql.Selector) {
+		s1 := s.Clone().SetP(nil)
+		for _, p := range predicates {
+			p(s1)
+		}
+		s.Where(s1.P())
+	})
 }
 
 // Or groups predicates with the OR operator between them.
 func Or(predicates ...predicate.AuthCode) predicate.AuthCode {
-	return predicate.AuthCode(sql.OrPredicates(predicates...))
+	return predicate.AuthCode(func(s *sql.Selector) {
+		s1 := s.Clone().SetP(nil)
+		for i, p := range predicates {
+			if i > 0 {
+				s1.Or()
+			}
+			p(s1)
+		}
+		s.Where(s1.P())
+	})
 }
 
 // Not applies the not operator on the given predicate.
 func Not(p predicate.AuthCode) predicate.AuthCode {
-	return predicate.AuthCode(sql.NotPredicates(p))
+	return predicate.AuthCode(func(s *sql.Selector) {
+		p(s.Not())
+	})
 }

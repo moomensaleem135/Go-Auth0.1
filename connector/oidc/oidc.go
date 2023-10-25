@@ -15,7 +15,6 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/dexidp/dex/connector"
-	groups_pkg "github.com/dexidp/dex/pkg/groups"
 	"github.com/dexidp/dex/pkg/httpclient"
 	"github.com/dexidp/dex/pkg/log"
 )
@@ -51,8 +50,7 @@ type Config struct {
 	InsecureSkipEmailVerified bool `json:"insecureSkipEmailVerified"`
 
 	// InsecureEnableGroups enables groups claims. This is disabled by default until https://github.com/dexidp/dex/issues/1065 is resolved
-	InsecureEnableGroups bool     `json:"insecureEnableGroups"`
-	AllowedGroups        []string `json:"allowedGroups"`
+	InsecureEnableGroups bool `json:"insecureEnableGroups"`
 
 	// AcrValues (Authentication Context Class Reference Values) that specifies the Authentication Context Class Values
 	// within the Authentication Request that the Authorization Server is being requested to use for
@@ -89,6 +87,27 @@ type Config struct {
 		// Configurable key which contains the groups claims
 		GroupsKey string `json:"groups"` // defaults to "groups"
 	} `json:"claimMapping"`
+
+	// ClaimModifications holds all claim modifications options
+	ClaimModifications struct {
+		NewGroupsFromClaims []NewGroupsFromClaims `json:"newGroupsFromClaims"`
+	} `json:"claimModifications"`
+}
+
+// NewGroupFromClaims creates a new group from a list of claims and appends it to the list of existing groups.
+type NewGroupsFromClaims struct {
+	// List of claim to join together
+	ClaimList []string `json:"claimList"`
+
+	// String to separate the claims
+	Delimiter string `json:"delimiter"`
+
+	// Should Dex remove the Delimiter string from claim values
+	// This is done to keep resulting claim structure in full control of the Dex operator
+	ClearDelimiter bool `json:"clearDelimiter"`
+
+	// String to place before the first claim
+	Prefix string `json:"prefix"`
 }
 
 // Domains that don't support basic auth. golang.org/x/oauth2 has an internal
@@ -182,7 +201,6 @@ func (c *Config) Open(id string, logger log.Logger) (conn connector.Connector, e
 		httpClient:                httpClient,
 		insecureSkipEmailVerified: c.InsecureSkipEmailVerified,
 		insecureEnableGroups:      c.InsecureEnableGroups,
-		allowedGroups:             c.AllowedGroups,
 		acrValues:                 c.AcrValues,
 		getUserInfo:               c.GetUserInfo,
 		promptType:                c.PromptType,
@@ -192,6 +210,7 @@ func (c *Config) Open(id string, logger log.Logger) (conn connector.Connector, e
 		preferredUsernameKey:      c.ClaimMapping.PreferredUsernameKey,
 		emailKey:                  c.ClaimMapping.EmailKey,
 		groupsKey:                 c.ClaimMapping.GroupsKey,
+		newGroupsFromClaims:       c.ClaimModifications.NewGroupsFromClaims,
 	}, nil
 }
 
@@ -210,7 +229,6 @@ type oidcConnector struct {
 	httpClient                *http.Client
 	insecureSkipEmailVerified bool
 	insecureEnableGroups      bool
-	allowedGroups             []string
 	acrValues                 []string
 	getUserInfo               bool
 	promptType                string
@@ -220,6 +238,7 @@ type oidcConnector struct {
 	preferredUsernameKey      string
 	emailKey                  string
 	groupsKey                 string
+	newGroupsFromClaims       []NewGroupsFromClaims
 }
 
 func (c *oidcConnector) Close() error {
@@ -429,17 +448,29 @@ func (c *oidcConnector) createIdentity(ctx context.Context, identity connector.I
 				}
 			}
 		}
+	}
 
-		// Validate that the user is part of allowedGroups
-		if len(c.allowedGroups) > 0 {
-			groupMatches := groups_pkg.Filter(groups, c.allowedGroups)
-
-			if len(groupMatches) == 0 {
-				// No group membership matches found, disallowing
-				return identity, fmt.Errorf("user not a member of allowed groups")
+	for _, config := range c.newGroupsFromClaims {
+		newGroupSegments := []string{
+			config.Prefix,
+		}
+		for _, claimName := range config.ClaimList {
+			claimValue, ok := claims[claimName].(string)
+			if !ok { // Non string claim value are ignored, concatenating them doesn't really make any sense
+				continue
 			}
 
-			groups = groupMatches
+			if config.ClearDelimiter {
+				// Removing the delimiter string from the concatenated claim to ensure resulting claim structure
+				// is in full control of Dex operator
+				claimValue = strings.ReplaceAll(claimValue, config.Delimiter, "")
+			}
+
+			newGroupSegments = append(newGroupSegments, claimValue)
+		}
+
+		if len(newGroupSegments) > 1 {
+			groups = append(groups, strings.Join(newGroupSegments, config.Delimiter))
 		}
 	}
 

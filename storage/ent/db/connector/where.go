@@ -319,15 +319,32 @@ func ConfigLTE(v []byte) predicate.Connector {
 
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.Connector) predicate.Connector {
-	return predicate.Connector(sql.AndPredicates(predicates...))
+	return predicate.Connector(func(s *sql.Selector) {
+		s1 := s.Clone().SetP(nil)
+		for _, p := range predicates {
+			p(s1)
+		}
+		s.Where(s1.P())
+	})
 }
 
 // Or groups predicates with the OR operator between them.
 func Or(predicates ...predicate.Connector) predicate.Connector {
-	return predicate.Connector(sql.OrPredicates(predicates...))
+	return predicate.Connector(func(s *sql.Selector) {
+		s1 := s.Clone().SetP(nil)
+		for i, p := range predicates {
+			if i > 0 {
+				s1.Or()
+			}
+			p(s1)
+		}
+		s.Where(s1.P())
+	})
 }
 
 // Not applies the not operator on the given predicate.
 func Not(p predicate.Connector) predicate.Connector {
-	return predicate.Connector(sql.NotPredicates(p))
+	return predicate.Connector(func(s *sql.Selector) {
+		p(s.Not())
+	})
 }
