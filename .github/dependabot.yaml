@@ -15,13 +15,6 @@ updates:
     schedule:
       interval: "daily"
 
-  - package-ecosystem: "gomod"
-    directory: "/examples"
-    labels:
-      - "area/dependencies"
-    schedule:
-      interval: "daily"
-
   - package-ecosystem: "docker"
     directory: "/"
     labels:
