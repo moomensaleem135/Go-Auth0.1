@@ -302,7 +302,6 @@ func TestRetryOnConflict(t *testing.T) {
 }
 
 func TestRefreshTokenLock(t *testing.T) {
-	ctx := context.Background()
 	if os.Getenv(kubeconfigPathVariableName) == "" {
 		t.Skipf("variable %q not set, skipping kubernetes storage tests\n", kubeconfigPathVariableName)
 	}
@@ -346,7 +345,7 @@ func TestRefreshTokenLock(t *testing.T) {
 		ConnectorData: []byte(`{"some":"data"}`),
 	}
 
-	err = kubeClient.CreateRefresh(ctx, r)
+	err = kubeClient.CreateRefresh(r)
 	require.NoError(t, err)
 
 	t.Run("Timeout lock error", func(t *testing.T) {

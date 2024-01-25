@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"context"
 	"errors"
 	"strings"
 
@@ -61,11 +60,11 @@ func (s staticClientsStorage) ListClients() ([]Client, error) {
 	return append(clients[:n], s.clients...), nil
 }
 
-func (s staticClientsStorage) CreateClient(ctx context.Context, c Client) error {
+func (s staticClientsStorage) CreateClient(c Client) error {
 	if s.isStatic(c.ID) {
 		return errors.New("static clients: read-only cannot create client")
 	}
-	return s.Storage.CreateClient(ctx, c)
+	return s.Storage.CreateClient(c)
 }
 
 func (s staticClientsStorage) DeleteClient(id string) error {
@@ -141,11 +140,11 @@ func (s staticPasswordsStorage) ListPasswords() ([]Password, error) {
 	return append(passwords[:n], s.passwords...), nil
 }
 
-func (s staticPasswordsStorage) CreatePassword(ctx context.Context, p Password) error {
+func (s staticPasswordsStorage) CreatePassword(p Password) error {
 	if s.isStatic(p.Email) {
 		return errors.New("static passwords: read-only cannot create password")
 	}
-	return s.Storage.CreatePassword(ctx, p)
+	return s.Storage.CreatePassword(p)
 }
 
 func (s staticPasswordsStorage) DeletePassword(email string) error {
@@ -211,11 +210,11 @@ func (s staticConnectorsStorage) ListConnectors() ([]Connector, error) {
 	return append(connectors[:n], s.connectors...), nil
 }
 
-func (s staticConnectorsStorage) CreateConnector(ctx context.Context, c Connector) error {
+func (s staticConnectorsStorage) CreateConnector(c Connector) error {
 	if s.isStatic(c.ID) {
 		return errors.New("static connectors: read-only cannot create connector")
 	}
-	return s.Storage.CreateConnector(ctx, c)
+	return s.Storage.CreateConnector(c)
 }
 
 func (s staticConnectorsStorage) DeleteConnector(id string) error {

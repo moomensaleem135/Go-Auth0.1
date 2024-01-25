@@ -2,7 +2,6 @@
 package memory
 
 import (
-	"context"
 	"strings"
 	"sync"
 	"time"
@@ -10,8 +9,6 @@ import (
 	"github.com/dexidp/dex/pkg/log"
 	"github.com/dexidp/dex/storage"
 )
-
-var _ storage.Storage = (*memStorage)(nil)
 
 // New returns an in memory storage.
 func New(logger log.Logger) storage.Storage {
@@ -101,7 +98,7 @@ func (s *memStorage) GarbageCollect(now time.Time) (result storage.GCResult, err
 	return result, nil
 }
 
-func (s *memStorage) CreateClient(ctx context.Context, c storage.Client) (err error) {
+func (s *memStorage) CreateClient(c storage.Client) (err error) {
 	s.tx(func() {
 		if _, ok := s.clients[c.ID]; ok {
 			err = storage.ErrAlreadyExists
@@ -112,7 +109,7 @@ func (s *memStorage) CreateClient(ctx context.Context, c storage.Client) (err er
 	return
 }
 
-func (s *memStorage) CreateAuthCode(ctx context.Context, c storage.AuthCode) (err error) {
+func (s *memStorage) CreateAuthCode(c storage.AuthCode) (err error) {
 	s.tx(func() {
 		if _, ok := s.authCodes[c.ID]; ok {
 			err = storage.ErrAlreadyExists
@@ -123,7 +120,7 @@ func (s *memStorage) CreateAuthCode(ctx context.Context, c storage.AuthCode) (er
 	return
 }
 
-func (s *memStorage) CreateRefresh(ctx context.Context, r storage.RefreshToken) (err error) {
+func (s *memStorage) CreateRefresh(r storage.RefreshToken) (err error) {
 	s.tx(func() {
 		if _, ok := s.refreshTokens[r.ID]; ok {
 			err = storage.ErrAlreadyExists
@@ -134,7 +131,7 @@ func (s *memStorage) CreateRefresh(ctx context.Context, r storage.RefreshToken) 
 	return
 }
 
-func (s *memStorage) CreateAuthRequest(ctx context.Context, a storage.AuthRequest) (err error) {
+func (s *memStorage) CreateAuthRequest(a storage.AuthRequest) (err error) {
 	s.tx(func() {
 		if _, ok := s.authReqs[a.ID]; ok {
 			err = storage.ErrAlreadyExists
@@ -145,7 +142,7 @@ func (s *memStorage) CreateAuthRequest(ctx context.Context, a storage.AuthReques
 	return
 }
 
-func (s *memStorage) CreatePassword(ctx context.Context, p storage.Password) (err error) {
+func (s *memStorage) CreatePassword(p storage.Password) (err error) {
 	lowerEmail := strings.ToLower(p.Email)
 	s.tx(func() {
 		if _, ok := s.passwords[lowerEmail]; ok {
@@ -157,7 +154,7 @@ func (s *memStorage) CreatePassword(ctx context.Context, p storage.Password) (er
 	return
 }
 
-func (s *memStorage) CreateOfflineSessions(ctx context.Context, o storage.OfflineSessions) (err error) {
+func (s *memStorage) CreateOfflineSessions(o storage.OfflineSessions) (err error) {
 	id := offlineSessionID{
 		userID: o.UserID,
 		connID: o.ConnID,
@@ -172,7 +169,7 @@ func (s *memStorage) CreateOfflineSessions(ctx context.Context, o storage.Offlin
 	return
 }
 
-func (s *memStorage) CreateConnector(ctx context.Context, connector storage.Connector) (err error) {
+func (s *memStorage) CreateConnector(connector storage.Connector) (err error) {
 	s.tx(func() {
 		if _, ok := s.connectors[connector.ID]; ok {
 			err = storage.ErrAlreadyExists
@@ -484,7 +481,7 @@ func (s *memStorage) UpdateConnector(id string, updater func(c storage.Connector
 	return
 }
 
-func (s *memStorage) CreateDeviceRequest(ctx context.Context, d storage.DeviceRequest) (err error) {
+func (s *memStorage) CreateDeviceRequest(d storage.DeviceRequest) (err error) {
 	s.tx(func() {
 		if _, ok := s.deviceRequests[d.UserCode]; ok {
 			err = storage.ErrAlreadyExists
@@ -506,7 +503,7 @@ func (s *memStorage) GetDeviceRequest(userCode string) (req storage.DeviceReques
 	return
 }
 
-func (s *memStorage) CreateDeviceToken(ctx context.Context, t storage.DeviceToken) (err error) {
+func (s *memStorage) CreateDeviceToken(t storage.DeviceToken) (err error) {
 	s.tx(func() {
 		if _, ok := s.deviceTokens[t.DeviceCode]; ok {
 			err = storage.ErrAlreadyExists

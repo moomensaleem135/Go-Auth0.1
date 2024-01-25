@@ -1,7 +1,6 @@
 package memory
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -13,7 +12,6 @@ import (
 )
 
 func TestStaticClients(t *testing.T) {
-	ctx := context.Background()
 	logger := &logrus.Logger{
 		Out:       os.Stderr,
 		Formatter: &logrus.TextFormatter{DisableColors: true},
@@ -25,7 +23,7 @@ func TestStaticClients(t *testing.T) {
 	c2 := storage.Client{ID: "bar", Secret: "bar_secret"}
 	c3 := storage.Client{ID: "spam", Secret: "spam_secret"}
 
-	backing.CreateClient(ctx, c1)
+	backing.CreateClient(c1)
 	s := storage.WithStaticClients(backing, []storage.Client{c2})
 
 	tests := []struct {
@@ -84,7 +82,7 @@ func TestStaticClients(t *testing.T) {
 		{
 			name: "create client",
 			action: func() error {
-				return s.CreateClient(ctx, c3)
+				return s.CreateClient(c3)
 			},
 		},
 	}
@@ -101,7 +99,6 @@ func TestStaticClients(t *testing.T) {
 }
 
 func TestStaticPasswords(t *testing.T) {
-	ctx := context.Background()
 	logger := &logrus.Logger{
 		Out:       os.Stderr,
 		Formatter: &logrus.TextFormatter{DisableColors: true},
@@ -114,7 +111,7 @@ func TestStaticPasswords(t *testing.T) {
 	p3 := storage.Password{Email: "spam@example.com", Username: "spam_secret"}
 	p4 := storage.Password{Email: "Spam@example.com", Username: "Spam_secret"}
 
-	backing.CreatePassword(ctx, p1)
+	backing.CreatePassword(p1)
 	s := storage.WithStaticPasswords(backing, []storage.Password{p2}, logger)
 
 	tests := []struct {
@@ -167,10 +164,10 @@ func TestStaticPasswords(t *testing.T) {
 		{
 			name: "create passwords",
 			action: func() error {
-				if err := s.CreatePassword(ctx, p4); err != nil {
+				if err := s.CreatePassword(p4); err != nil {
 					return err
 				}
-				return s.CreatePassword(ctx, p3)
+				return s.CreatePassword(p3)
 			},
 			wantErr: true,
 		},
@@ -214,7 +211,6 @@ func TestStaticPasswords(t *testing.T) {
 }
 
 func TestStaticConnectors(t *testing.T) {
-	ctx := context.Background()
 	logger := &logrus.Logger{
 		Out:       os.Stderr,
 		Formatter: &logrus.TextFormatter{DisableColors: true},
@@ -230,7 +226,7 @@ func TestStaticConnectors(t *testing.T) {
 	c2 := storage.Connector{ID: storage.NewID(), Type: "ldap", Name: "ldap", ResourceVersion: "1", Config: config2}
 	c3 := storage.Connector{ID: storage.NewID(), Type: "saml", Name: "saml", ResourceVersion: "1", Config: config3}
 
-	backing.CreateConnector(ctx, c1)
+	backing.CreateConnector(c1)
 	s := storage.WithStaticConnectors(backing, []storage.Connector{c2})
 
 	tests := []struct {
@@ -289,7 +285,7 @@ func TestStaticConnectors(t *testing.T) {
 		{
 			name: "create connector",
 			action: func() error {
-				return s.CreateConnector(ctx, c3)
+				return s.CreateConnector(c3)
 			},
 		},
 	}

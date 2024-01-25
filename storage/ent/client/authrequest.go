@@ -8,7 +8,7 @@ import (
 )
 
 // CreateAuthRequest saves provided auth request into the database.
-func (d *Database) CreateAuthRequest(ctx context.Context, authRequest storage.AuthRequest) error {
+func (d *Database) CreateAuthRequest(authRequest storage.AuthRequest) error {
 	_, err := d.client.AuthRequest.Create().
 		SetID(authRequest.ID).
 		SetClientID(authRequest.ClientID).
@@ -32,7 +32,7 @@ func (d *Database) CreateAuthRequest(ctx context.Context, authRequest storage.Au
 		SetConnectorID(authRequest.ConnectorID).
 		SetConnectorData(authRequest.ConnectorData).
 		SetHmacKey(authRequest.HMACKey).
-		Save(ctx)
+		Save(context.TODO())
 	if err != nil {
 		return convertDBError("create auth request: %w", err)
 	}

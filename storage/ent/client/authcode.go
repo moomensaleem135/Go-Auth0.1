@@ -7,7 +7,7 @@ import (
 )
 
 // CreateAuthCode saves provided auth code into the database.
-func (d *Database) CreateAuthCode(ctx context.Context, code storage.AuthCode) error {
+func (d *Database) CreateAuthCode(code storage.AuthCode) error {
 	_, err := d.client.AuthCode.Create().
 		SetID(code.ID).
 		SetClientID(code.ClientID).
@@ -26,7 +26,7 @@ func (d *Database) CreateAuthCode(ctx context.Context, code storage.AuthCode) er
 		SetExpiry(code.Expiry.UTC()).
 		SetConnectorID(code.ConnectorID).
 		SetConnectorData(code.ConnectorData).
-		Save(ctx)
+		Save(context.TODO())
 	if err != nil {
 		return convertDBError("create auth code: %w", err)
 	}
