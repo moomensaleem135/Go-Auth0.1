@@ -25,7 +25,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/oklog/run v1.1.0
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/client_golang v1.19.0
+	github.com/prometheus/client_golang v1.19.1
 	github.com/russellhaering/goxmldsig v1.4.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.0
@@ -36,7 +36,7 @@ require (
 	golang.org/x/exp v0.0.0-20221004215720-b9f4876ce741
 	golang.org/x/net v0.25.0
 	golang.org/x/oauth2 v0.20.0
-	google.golang.org/api v0.180.0
+	google.golang.org/api v0.179.0
 	google.golang.org/grpc v1.63.2
 	google.golang.org/protobuf v1.34.1
 )
